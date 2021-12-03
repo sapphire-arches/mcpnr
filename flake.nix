@@ -1,31 +1,35 @@
 {
-  description = "A very basic flake";
+  description = "PnR for Minecraft";
 
   inputs = {
     bt-yosys.url = "github:bobtwinkles/yosys/master";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nix, nixpkgs, bt-yosys }:
-    let
-      supportedSystems = [ "x86_64-linux" "i686-linux" "aarch64-linux" ];
-      forAllSystems = f: nixpkgs.lib.genAttrs supportedSystems (system: f system);
-      version = "0.1-${self.shortRev or "dirty"}";
-    in
+  outputs = { self, nix, nixpkgs, bt-yosys, flake-utils }:
     {
       overlay = final: prev: {
-        mcpnr = with final; let nix = final.nix; in stdenv.mkDerivation {
-          name = "mcpnr-${version}";
-          buildInputs = [
-            bt-yosys
-          ];
+        mcpnr = rec {
+          nix = prev.callPackage ./nix { };
         };
-
-        src = self;
       };
+    }
+    //
+    (
+      flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays =[
+              self.overlay
+            ];
+          };
+        in
+        {
+          packages = flake-utils.lib.flattenTree pkgs.mcpnr.nix;
 
-      defaultPackage = forAllSystems (system: (import nixpkgs {
-        inherit system;
-        overlays = [ self.overlay nix.overlay ];
-      }).mcpnr);
-    };
+          checks = { };
+        }
+      )
+    );
 }
