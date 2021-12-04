@@ -1,0 +1,77 @@
+/*********************************************/
+/*                                           */
+/* Minecraft cell library                    */
+/*                                           */
+/* Reed Koser                                */
+/*                                           */
+/* Process: none                             */
+/*                                           */
+/* cell area represents XZ footprint.        */
+/*                                           */
+/*********************************************/
+library(minecraft_cells) {
+  technology (cmos);
+  revision: 1.0;
+
+  time_unit               : "50ms";
+
+  delay_model             : minecraft_delay;
+
+  cell(gate_nand_i2.nbt) {
+    area : 9;
+    pin(I0) {
+      direction : input;
+    }
+
+    pin(I1) {
+      direction : input;
+    }
+
+    pin(O0) {
+      direction : output;
+      function : "(I0 * I1)'";
+    }
+  }
+
+  cell (gate_nor_i2.nbt) {
+    area : 6;
+    pin(I0) {
+      direction : input;
+    }
+
+    pin(I1) {
+      direction : input;
+    }
+
+    pin(O0) {
+      direction : output;
+      function : "(I0 + I1)'";
+    }
+  }
+
+  cell (gate_not.nbt) {
+    area : 3;
+    pin(I0) {
+      direction : input;
+    }
+
+    pin(O0) {
+      direction : output;
+      function : "I0'";
+    }
+  }
+
+  /* This gate will get dropped by followup opt passes but ABC needs it for
+   * techmapping */
+  cell (gate_buffer) {
+    area : 1;
+    pin(I0) {
+      direction : input;
+    }
+
+    pin(O0) {
+      direction : output;
+      function : "I0";
+    }
+  }
+}
