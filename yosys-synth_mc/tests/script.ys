@@ -1,4 +1,4 @@
-read_verilog ./nor-multibit.v
+read_verilog ./adder.v
 proc
 flatten
 opt_expr

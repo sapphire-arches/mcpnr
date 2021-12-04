@@ -19,45 +19,87 @@ library(minecraft_cells) {
 
   cell(gate_nand_i2.nbt) {
     area : 9;
-    pin(I0) {
+    pin(A) {
       direction : input;
     }
 
-    pin(I1) {
+    pin(B) {
       direction : input;
     }
 
-    pin(O0) {
+    pin(Y) {
       direction : output;
-      function : "(I0 * I1)'";
+      function : "(A * B)'";
     }
   }
 
   cell (gate_nor_i2.nbt) {
     area : 6;
-    pin(I0) {
+    pin(A) {
       direction : input;
     }
 
-    pin(I1) {
+    pin(B) {
       direction : input;
     }
 
-    pin(O0) {
+    pin(Y) {
       direction : output;
-      function : "(I0 + I1)'";
+      function : "(A + B)'";
     }
   }
 
-  cell (gate_not.nbt) {
-    area : 3;
-    pin(I0) {
+  cell (gate_xor.nbt) {
+    area : 9;
+    pin(A) {
       direction : input;
     }
 
-    pin(O0) {
+    pin(B) {
+      direction : input;
+    }
+
+    pin(Y) {
       direction : output;
-      function : "I0'";
+      function : "(A * B') + (A' * B)";
+    }
+  }
+
+  cell (gate_fa.nbt) {
+    area : 12;
+    pin(A) {
+      direction : input;
+    }
+
+    pin(B) {
+      direction : input;
+    }
+
+    pin(CI) {
+      direction : input;
+    }
+
+    pin(Y) {
+      direction : output;
+      function : "((A * B) + (B * CI)) + (CI * A)";
+    }
+
+    pin(CO) {
+      direction : output;
+      function : "(A ^ B) ^ CI";
+    }
+  }
+
+
+  cell (gate_not.nbt) {
+    area : 3;
+    pin(A) {
+      direction : input;
+    }
+
+    pin(Y) {
+      direction : output;
+      function : "A'";
     }
   }
 
@@ -65,13 +107,13 @@ library(minecraft_cells) {
    * techmapping */
   cell (gate_buffer) {
     area : 1;
-    pin(I0) {
+    pin(A) {
       direction : input;
     }
 
-    pin(O0) {
+    pin(Y) {
       direction : output;
-      function : "I0";
+      function : "A";
     }
   }
 }
