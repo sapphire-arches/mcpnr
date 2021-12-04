@@ -122,4 +122,35 @@ library(minecraft_cells) {
       function : "A";
     }
   }
+
+  /*** -=- Begin synchronous logic -=- ***/
+
+  cell (dff.nbt) {
+    area : 6;
+    ff("IQ", "IQN") {
+      next_state : "D";
+      clocked_on : "CLK";
+      clear_preset_var1 : L;
+    }
+
+    pin(D) {
+      direction : input;
+    }
+
+    pin(CLK) {
+      direction : input;
+    }
+
+    pin(Q) {
+      direction : output;
+      function  : "IQ";
+
+      timing() {
+        timing_type    : rising_edge;
+        intrinsic_rise : 100;
+        intrinsic_fall : 100;
+        related_pin    : "CLK";
+      }
+    }
+  }
 }

@@ -1,12 +1,24 @@
-read_verilog ./adder.v
+read_verilog ./counter.v
 proc
 flatten
 opt_expr
 opt_clean
 check
 opt
+wreduce
+peepopt
+opt_clean
 share
+opt
+memory -nomap
+opt_clean
+
+opt -fast -full
+memory_map
+opt -full
 techmap
+
+dfflibmap -liberty ../techlib/minecraft.lib
 
 opt -fast
 abc -liberty ../techlib/minecraft.lib
