@@ -31,6 +31,8 @@
           packages = mcpnrPackages;
 
           devShell = pkgs.mkShell {
+            name = "mcpnr-devel-shell";
+
             buildInputs = with pkgs; [
               # For formatting Nix expressions
               nixpkgs-fmt
