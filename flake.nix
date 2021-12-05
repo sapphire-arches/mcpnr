@@ -20,6 +20,7 @@
           pkgs = import nixpkgs {
             inherit system;
             overlays = [
+              bt-yosys.outputs.overlay
               self.overlay
             ];
           };
