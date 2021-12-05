@@ -1,7 +1,7 @@
 { pkgs, stdenv, mcpnr }:
 stdenv.mkDerivation {
   name = "yosys-synth-mc";
-  src = "../../yosys-synth_mc";
+  src = ../../yosys-synth_mc;
 
   doCheck = false;
 
@@ -14,5 +14,8 @@ stdenv.mkDerivation {
     yosys
   ];
 
-  makeFlags = [ "YOSYS_CONFIG=yosys-config" ];
+  makeFlags = [
+    "YOSYS_CONFIG=${pkgs.yosys}/bin/yosys-config"
+    "PREFIX=${placeholder "out"}"
+  ];
 }

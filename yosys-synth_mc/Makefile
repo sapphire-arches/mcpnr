@@ -10,14 +10,24 @@ SOURCES := \
     synth_mc.cc
 
 OBJS := $(patsubst %.cc,%.o,$(SOURCES))
+PLUGIN_LIBRARY := synth_mc.so
 
 all: synth_mc.so
 
 $(OBJS): %.o: %.cc
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(EXTRA_FLAGS) -c -o $@ $^
 
-synth_mc.so: $(OBJS)
+$(PLUGIN_LIBRARY): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $^ $(LDLIBS)
+
+# Install logic
+PREFIX ?= /usr/local
+BINDIR := $(PREFIX)/bin
+LIBDIR := $(PREFIX)/lib/yosys
+DATDIR := $(PREFIX)/share/yosys
+
+install: synth_mc.so
+	install -D "--target-directory=$(DATDIR)/plugins" $(PLUGIN_LIBRARY)
 
 clean:
 	rm -f *.d *.o *.so
