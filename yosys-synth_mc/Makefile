@@ -1,3 +1,4 @@
+YOSYS_CONFIG ?= yosys-config
 CXX ?= $(shell $(YOSYS_CONFIG) --cxx)
 CXXFLAGS ?= $(shell $(YOSYS_CONFIG) --cxxflags) #-DSDC_DEBUG
 LDFLAGS ?= $(shell $(YOSYS_CONFIG) --ldflags)
