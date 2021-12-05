@@ -3,6 +3,10 @@ name = "mcpnr-placement"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+
+[dependencies.protobuf]
+version = "3.0.0-alpha.2"
+
+[build-dependencies]
+protoc-rust = "3.0.0-alpha.2"

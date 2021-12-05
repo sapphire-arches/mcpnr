@@ -93,6 +93,7 @@
               # Need to expose the icon data directory so xdot can find icons
               XDG_DATA_DIRS=$GSETTINGS_SCHEMAS_PATH:${pkgs.gnome.adwaita-icon-theme}/share
 
+              export YOSYS_PROTO_PATH=${pkgs.yosys-proto}
               RUST_SRC_PATH=${pkgs.mcpnr-rust-platform.rustLibSrc}
             '';
           };
