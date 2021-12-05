@@ -131,6 +131,10 @@ struct SynthMcPass : public ScriptPass {
         flatten = true;
         continue;
       }
+      if (args[argidx] == "-liberty") {
+        liberty_file = args[++argidx];
+        continue;
+      }
       if (args[argidx] == "-nofsm") {
         nofsm = true;
         continue;
