@@ -51,6 +51,22 @@
         "type": "github"
       }
     },
+    "mozilla-overlay": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1637337116,
+        "narHash": "sha256-LKqAcdL+woWeYajs02bDQ7q8rsqgXuzhC354NoRaV80=",
+        "owner": "mozilla",
+        "repo": "nixpkgs-mozilla",
+        "rev": "cbc7435f5b0b3d17b16fb1d20cf7b616eec5e093",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mozilla",
+        "repo": "nixpkgs-mozilla",
+        "type": "github"
+      }
+    },
     "nix": {
       "inputs": {
         "lowdown-src": "lowdown-src",
@@ -100,11 +116,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1638691038,
-        "narHash": "sha256-MYx1fdbWzI6csqDHbZmVQexmSq4GoPUSSr6IxmWojCI=",
+        "lastModified": 1638696595,
+        "narHash": "sha256-3qDI6FFDNxG3v/itjhHr28k5xmPLEax+WUW5GkGDfPQ=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "fde30f1be0fa11df972dbc12c35abb702c6ebfdc",
+        "rev": "71239df3c04d1df03603bfeae6b47de2ffa77352",
         "type": "github"
       },
       "original": {
@@ -118,6 +134,7 @@
       "inputs": {
         "bt-yosys": "bt-yosys",
         "flake-utils": "flake-utils",
+        "mozilla-overlay": "mozilla-overlay",
         "nixpkgs": "nixpkgs_3"
       }
     }

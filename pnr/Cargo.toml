@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+  "mcpnr-common",
+  "mcpnr-placement",
+]
