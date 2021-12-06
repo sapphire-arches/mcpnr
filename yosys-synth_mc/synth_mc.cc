@@ -101,6 +101,9 @@ struct SynthMcPass : public ScriptPass {
     string run_from, run_to;
     clear_flags();
 
+    log_header(design, "Executing SYNTH_MC pass.\n");
+    log_push();
+
     size_t argidx;
     for (argidx = 1; argidx < args.size(); argidx++)
     {
@@ -132,6 +135,10 @@ struct SynthMcPass : public ScriptPass {
         continue;
       }
       if (args[argidx] == "-liberty") {
+        if (argidx + 1 >= args.size()) {
+          log_cmd_error("-liberty must have an argument\n");
+          continue;
+        }
         liberty_file = args[++argidx];
         continue;
       }
@@ -153,9 +160,6 @@ struct SynthMcPass : public ScriptPass {
 
     if (!design->full_selection())
       log_cmd_error("This command only operates on fully selected designs!\n");
-
-    log_header(design, "Executing SYNTH_MC pass.\n");
-    log_push();
 
     run_script(design, run_from, run_to);
 
