@@ -50,6 +50,14 @@ clean:
 .PHONY: all clean
 
 #
+# Utility targets
+#
+decode-placed: $(MODULE_PLACED)
+	protoc --decode=mcpnr.PlacedDesign \
+	  --descriptor_set_in=$$(find $(MCPNR_TARGET_DIR) -name 'file_descriptor_set.protobuf') \
+	 < $(MODULE_PLACED)
+
+#
 # Actual build rules
 #
 QUIET_CMD = @printf "[ %15s ] %s\n" $1 $@ &&
