@@ -105,14 +105,17 @@ dependencies = [
 [[package]]
 name = "mcpnr-common"
 version = "0.1.0"
+dependencies = [
+ "protobuf",
+ "protoc-rust",
+]
 
 [[package]]
 name = "mcpnr-placement"
 version = "0.1.0"
 dependencies = [
  "clap",
- "protobuf",
- "protoc-rust",
+ "mcpnr-common",
 ]
 
 [[package]]
