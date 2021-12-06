@@ -2,9 +2,15 @@ ifndef MODULE_NAME
   $(error Common module included without setting MODULE_NAME)
 endif
 
+#
+# Module file names
+#
+
+MODULE_TECHMAP_SCRIPT = $(MODULE_NAME).ys
 MODULE_TECHMAPPED = $(MODULE_NAME).yosys-design
 MODULE_PLACED = $(MODULE_NAME).mcpnr-placement
 MODULE_ROUTED = $(MODULE_NAME).nbt
+
 EXTRA_FILES += yosys.log
 
 #
@@ -23,6 +29,12 @@ MCPNR_TARGET_DIR ?= $(abspath $(MCPNR_WORKSPACE_ROOT)/target/$(MCPNR_BUILD_FLAVO
 MCPNR_YOSYS_PLUGIN_DIR ?= $(abspath $(current_dir)/../yosys-synth_mc)
 MCPNR_YOSYS_PLUGIN ?= $(MCPNR_YOSYS_PLUGIN_DIR)/synth_mc.so
 MCPNR_LIBERTY_FILE ?= $(MCPNR_YOSYS_PLUGIN_DIR)/techlib/minecraft.lib
+
+#
+# Tool locations
+#
+PYTHON3 ?= python3
+YOSYS_SCRIPT_GENERATE = $(abspath $(current_dir)/generate_script.py)
 PLACEMENT_TOOL ?= $(MCPNR_TARGET_DIR)/mcpnr-placement
 
 #
@@ -33,7 +45,7 @@ all: $(MODULE_ROUTED)
 .DEFAULT_GOAL := all
 
 clean:
-	rm -f $(MODULE_ROUTED) $(MODULE_TECHMAPPED) $(MODULE_PLACED) $(EXTRA_FILES)
+	rm -f $(MODULE_TECHMAP_SCRIPT) $(MODULE_ROUTED) $(MODULE_TECHMAPPED) $(MODULE_PLACED) $(EXTRA_FILES)
 
 .PHONY: all clean
 
@@ -42,18 +54,17 @@ clean:
 #
 QUIET_CMD = @printf "[ %15s ] %s\n" $1 $@ &&
 
-define YOSYS_SCRIPT
-read_verilog $(MODULE_NAME).v \n\
-plugin -i $(MCPNR_YOSYS_PLUGIN) \n\
-synth_mc -flatten -liberty $(MCPNR_LIBERTY_FILE) \n\
-stat -liberty $(MCPNR_LIBERTY_FILE) \n\
-write_protobuf $(MODULE_TECHMAPPED)
-endef
+YOSYS_SCRIPT_GENERATE_CMD = $(PYTHON3) $(YOSYS_SCRIPT_GENERATE) \
+  --liberty $(MCPNR_LIBERTY_FILE) \
+  --plugin $(MCPNR_YOSYS_PLUGIN) \
+  --output $(MODULE_TECHMAPPED) \
+  --verilog $(MODULE_NAME).v \
+  $@
 
-$(MODULE_NAME).ys:
-	$(call QUIET_CMD,WRITE_YOSYS) echo -e "${YOSYS_SCRIPT}" > $@
+$(MODULE_TECHMAP_SCRIPT): $(YOSYS_SCRIPT_GENERATE)
+	$(call QUIET_CMD,PYTHON) $(YOSYS_SCRIPT_GENERATE_CMD)
 
-$(MODULE_TECHMAPPED) : $(MODULE_NAME).v $(MODULE_NAME).ys $(MCPNR_YOSYS_PLUGIN) $(MCPNR_LIBERTY_FILE)
+$(MODULE_TECHMAPPED) : $(MODULE_NAME).v $(MODULE_TECHMAP_SCRIPT) $(MCPNR_YOSYS_PLUGIN) $(MCPNR_LIBERTY_FILE)
 	$(call QUIET_CMD,YOSYS) yosys -s $(MODULE_NAME).ys > yosys.log
 
 $(MODULE_PLACED) : $(MODULE_TECHMAPPED) $(PLACEMENT_TOOL)
