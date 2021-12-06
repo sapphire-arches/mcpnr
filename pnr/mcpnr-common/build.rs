@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 fn main() -> Result<(), std::io::Error> {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let out_dir = out_dir.join("protos");
-    let proto_cache_dir = PathBuf::from(&out_dir).join("cache");
+    let proto_out_dir = out_dir.join("protos");
+    let proto_cache_dir = PathBuf::from(&proto_out_dir).join("cache");
 
     fs::create_dir_all(&proto_cache_dir).expect("Failed to create proto file cache directory");
 
@@ -39,6 +39,7 @@ fn main() -> Result<(), std::io::Error> {
 
     prost_build::Config::new()
         .include_file("protos.rs")
+        .file_descriptor_set_path(out_dir.join("file_descriptor_set.protobuf"))
         .compile_protos(
             &proto_files,
             &[proto_cache_dir, PathBuf::from("./src/protos/")],
