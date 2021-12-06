@@ -1,7 +1,9 @@
-use std::path::PathBuf;
 use mcpnr_common::prost::Message;
+use mcpnr_common::protos::mcpnr::{PlacedDesign, Position};
+use mcpnr_common::protos::yosys::pb::Design;
+use std::path::PathBuf;
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 struct Config {
     input_file: PathBuf,
     output_file: PathBuf,
@@ -33,18 +35,49 @@ fn parse_args() -> Config {
     }
 }
 
+fn place(design: Design) -> PlacedDesign {
+    let cells = design
+        .modules
+        .into_values()
+        .next()
+        .unwrap()
+        .cell
+        .into_iter()
+        .map(|(key, cell)| {
+            let mcpnr_cell = mcpnr_common::protos::mcpnr::placed_design::Cell {
+                attribute: cell.attribute,
+                connection: cell.connection,
+                parameter: cell.parameter,
+                pos: Some(Position { x: 0, y: 0, z: 0 }),
+                r#type: cell.r#type,
+            };
+            (key, mcpnr_cell)
+        })
+        .collect();
+    PlacedDesign {
+        creator: format!(
+            "Placed by MCPNR {}, Synth: {}",
+            env!("CARGO_PKG_VERSION"),
+            design.creator,
+        ),
+        cells,
+    }
+}
+
 fn main() {
     let config = parse_args();
 
     let design = {
         let inf = std::fs::read(config.input_file).unwrap();
-        mcpnr_common::yosys::Design::decode(&inf[..]).unwrap()
+        Design::decode(&inf[..]).unwrap()
     };
+
+    let placed_design = place(design);
 
     {
         use std::io::Write;
         let mut outf = std::fs::File::create(config.output_file).unwrap();
-        let encoded = design.encode_to_vec();
+        let encoded = placed_design.encode_to_vec();
 
         outf.write_all(&encoded[..]).unwrap();
     }

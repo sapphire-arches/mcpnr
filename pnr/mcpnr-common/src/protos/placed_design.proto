@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package mcpnr;
+
+import 'yosys.proto';
+
+message Position {
+  int32 x = 1;
+  int32 y = 2;
+  int32 z = 3;
+}
+
+message PlacedDesign {
+    // Human-readable freeform 'remark' string.
+    string creator = 1;
+
+    // Named cells in this design.
+    message Cell {
+        // Type of the cell. Must point to an NBT file in the techmap search
+        // path.
+        string type = 1;
+
+        // Placed position (minimum XYZ)
+        Position pos = 2;
+
+        // Freeform parameters.
+        map<string, yosys.pb.Parameter> parameter = 3;
+        // Freeform attributes.
+        map<string, yosys.pb.Parameter> attribute = 4;
+
+        // Connection of named port to signal(s).
+        map<string, yosys.pb.BitVector> connection = 5;
+    }
+    map<string, Cell> cells = 3;
+}
