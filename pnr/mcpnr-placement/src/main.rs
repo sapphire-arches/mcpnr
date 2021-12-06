@@ -51,7 +51,7 @@ fn place(design: Design) -> PlacedDesign {
                 pos: Some(Position { x: 0, y: 0, z: 0 }),
                 r#type: cell.r#type,
             };
-            (key, mcpnr_cell)
+            mcpnr_cell
         })
         .collect();
     PlacedDesign {

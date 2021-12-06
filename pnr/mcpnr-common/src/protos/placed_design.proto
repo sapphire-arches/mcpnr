@@ -31,5 +31,5 @@ message PlacedDesign {
         // Connection of named port to signal(s).
         map<string, yosys.pb.BitVector> connection = 5;
     }
-    map<string, Cell> cells = 3;
+    repeated Cell cells = 3;
 }
