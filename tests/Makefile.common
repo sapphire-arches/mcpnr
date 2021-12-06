@@ -47,7 +47,7 @@ read_verilog $(MODULE_NAME).v \n\
 plugin -i $(MCPNR_YOSYS_PLUGIN) \n\
 synth_mc -flatten -liberty $(MCPNR_LIBERTY_FILE) \n\
 stat -liberty $(MCPNR_LIBERTY_FILE) \n\
-write_protobuf $(MODULE_TECHMAPPED)
+write_protobuf -text $(MODULE_TECHMAPPED)
 endef
 
 $(MODULE_NAME).ys:
