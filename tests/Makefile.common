@@ -57,8 +57,7 @@ $(MODULE_TECHMAPPED) : $(MODULE_NAME).v $(MODULE_NAME).ys $(MCPNR_YOSYS_PLUGIN) 
 	$(call QUIET_CMD,YOSYS) yosys -s $(MODULE_NAME).ys > yosys.log
 
 $(MODULE_PLACED) : $(MODULE_TECHMAPPED) $(PLACEMENT_TOOL)
-	$(call QUIET_CMD,PLACE) echo 'WARNING: actual module placment not implemented, just copying techmapped file' \
-	&& cp $< $@
+	$(call QUIET_CMD,PLACE) $(PLACEMENT_TOOL) $< $@
 
 $(MODULE_ROUTED) : $(MODULE_PLACED)
 	$(call QUIET_CMD,ROUTE) echo 'WARNING: actual module build not implemented, just copying placed file' \
