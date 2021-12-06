@@ -1,0 +1,6 @@
+test.json
+*.mcpnr-placement
+*.nbt
+*.yosys-design
+yosys.log
+*/*.ys

@@ -40,11 +40,12 @@ set -x
 BUILD_DIR=$(mktemp -d)
 trap "rm -rf ${BUILD_DIR}" 0 2 3 15
 
-MC_TECHLIB=${MY_DIR}/../techlib/minecraft.lib
+YOSYS_SYNTH_MC=${MY_DIR}/../../yosys-synth_mc/
+MC_TECHLIB=${YOSYS_SYNTH_MC}techlib/minecraft.lib
 YOSYS_SCRIPT_FILE=${BUILD_DIR}/script.ys
 YOSYS_LOG_FILE=${BUILD_DIR}/log.txt
 
-echo 'plugin -i' ${MY_DIR}/../synth_mc.so >> ${YOSYS_SCRIPT_FILE}
+echo 'plugin -i' ${YOSYS_SYNTH_MC}/synth_mc.so >> ${YOSYS_SCRIPT_FILE}
 
 for f in ${SERV_FILES}
 do
