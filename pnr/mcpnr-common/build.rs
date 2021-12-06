@@ -1,9 +1,8 @@
-use protoc_rust::{Codegen, Customize};
 use std::env;
 use std::fs;
 use std::path;
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     let out_dir = path::PathBuf::from(env::var("OUT_DIR").unwrap());
     let out_dir = out_dir.join("protos");
     let proto_cache_dir = path::PathBuf::from(&out_dir).join("cache");
@@ -30,13 +29,8 @@ fn main() {
         yosys_proto_cached
     };
 
-    Codegen::new()
-        .customize(Customize {
-            gen_mod_rs: Some(true),
-            ..Customize::default()
-        })
-        .out_dir(out_dir)
-        .inputs(&[yosys_proto])
-        .include(proto_cache_dir)
-        .run_from_script();
+    prost_build::Config::new()
+        .include_file("protos.rs")
+        .compile_protos(&[yosys_proto], &[proto_cache_dir])?;
+    Ok(())
 }

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use mcpnr_common::prost::Message;
 
 #[derive(Clone,Debug)]
 struct Config {
@@ -35,5 +36,16 @@ fn parse_args() -> Config {
 fn main() {
     let config = parse_args();
 
-    std::fs::copy(config.input_file, config.output_file);
+    let design = {
+        let inf = std::fs::read(config.input_file).unwrap();
+        mcpnr_common::yosys::Design::decode(&inf[..]).unwrap()
+    };
+
+    {
+        use std::io::Write;
+        let mut outf = std::fs::File::create(config.output_file).unwrap();
+        let encoded = design.encode_to_vec();
+
+        outf.write_all(&encoded[..]).unwrap();
+    }
 }
