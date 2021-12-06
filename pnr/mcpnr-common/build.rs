@@ -13,6 +13,7 @@ fn main() -> Result<(), std::io::Error> {
         let yosys_proto = env::var("YOSYS_PROTO_PATH")
             .expect("YOSYS_PROTO_PATH must be set to the path to the Yosys Protobuf spec file");
         println!("cargo:rerun-if-env-changed=YOSYS_PROTO_PATH");
+        println!("cargo:rerun-if-changed={}", yosys_proto);
 
         let yosys_proto_cached = proto_cache_dir.join("yosys.proto");
 
