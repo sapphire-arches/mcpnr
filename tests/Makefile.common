@@ -27,15 +27,20 @@ MCPNR_BUILD_FLAVOR ?= debug
 MCPNR_TARGET_DIR ?= $(abspath $(MCPNR_WORKSPACE_ROOT)/target/$(MCPNR_BUILD_FLAVOR))
 
 MCPNR_YOSYS_PLUGIN_DIR ?= $(abspath $(current_dir)/../yosys-synth_mc)
+SYNTH_MC_TECHLIB_DIR ?= $(MCPNR_YOSYS_PLUGIN_DIR)/techlib
 MCPNR_YOSYS_PLUGIN ?= $(MCPNR_YOSYS_PLUGIN_DIR)/synth_mc.so
-MCPNR_LIBERTY_FILE ?= $(MCPNR_YOSYS_PLUGIN_DIR)/techlib/minecraft.lib
+MCPNR_LIBERTY_FILE ?= $(SYNTH_MC_TECHLIB_DIR)/minecraft.lib
 
 #
 # Tool locations
 #
 PYTHON3 ?= python3
 YOSYS_SCRIPT_GENERATE = $(abspath $(current_dir)/generate_script.py)
+
 PLACEMENT_TOOL ?= $(MCPNR_TARGET_DIR)/mcpnr-placement
+
+ROUTING_TOOL ?= $(MCPNR_TARGET_DIR)/mcpnr-routing
+ROUTING_TOOL_CMD ?= $(ROUTING_TOOL) --techlib $(SYNTH_MC_TECHLIB_DIR)
 
 #
 # Meta targets
@@ -78,9 +83,8 @@ $(MODULE_TECHMAPPED) : $(MODULE_NAME).v $(MODULE_TECHMAP_SCRIPT) $(MCPNR_YOSYS_P
 $(MODULE_PLACED) : $(MODULE_TECHMAPPED) $(PLACEMENT_TOOL)
 	$(call QUIET_CMD,PLACE) $(PLACEMENT_TOOL) $< $@
 
-$(MODULE_ROUTED) : $(MODULE_PLACED)
-	$(call QUIET_CMD,ROUTE) echo 'WARNING: actual module build not implemented, just copying placed file' \
-	&& cp $< $@
+$(MODULE_ROUTED) : $(MODULE_PLACED) $(ROUTING_TOOL)
+	$(call QUIET_CMD,ROUTE) $(ROUTING_TOOL_CMD) $< $@
 
 #
 # Build rules for tools
@@ -100,6 +104,9 @@ ifeq ($(MCPNR_BUILD_FLAVOR),release)
 else
   CARGO_RELEASE_ARG=
 endif
+
+$(ROUTING_TOOL):
+	cd $(current_dir)/../pnr && cargo build $(CARGO_RELEASE_ARG) -p mcpnr-routing
 
 $(PLACEMENT_TOOL):
 	cd $(current_dir)/../pnr && cargo build $(CARGO_RELEASE_ARG) -p mcpnr-placement

@@ -3,4 +3,5 @@
 members = [
   "mcpnr-common",
   "mcpnr-placement",
+  "mcpnr-routing",
 ]
