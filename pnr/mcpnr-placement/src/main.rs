@@ -1,6 +1,7 @@
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::{PlacedDesign, Position};
-use mcpnr_common::protos::yosys::pb::Design;
+use mcpnr_common::protos::yosys::pb::parameter::Value as YPValue;
+use mcpnr_common::protos::yosys::pb::{Design, Parameter};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
@@ -39,7 +40,12 @@ fn place(design: Design) -> PlacedDesign {
     let cells = design
         .modules
         .into_values()
-        .next()
+        .find(|m| {
+            m.attribute.get("top")
+                == Some(&Parameter {
+                    value: Some(YPValue::Int(1)),
+                })
+        })
         .unwrap()
         .cell
         .into_iter()

@@ -26,7 +26,7 @@
 #  error "ABC support is required for techmapping"
 #endif
 
-#define MC_LIBERTY_FILE_DFL "techlib/minecraft.lib"
+#define MC_TECHLIB_DIR_DFL "techlib"
 
 USING_YOSYS_NAMESPACE
 PRIVATE_NAMESPACE_BEGIN
@@ -65,9 +65,9 @@ struct SynthMcPass : public ScriptPass {
     log("    -noshare\n");
     log("        do not run SAT-based resource sharing\n");
     log("\n");
-    log("    -liberty <file>\n");
-    log("        Liberty file specifying the technology library library\n");
-    log("        Defaults to: " MC_LIBERTY_FILE_DFL "\n");
+    log("    -techlib <path>\n");
+    log("        Path to the MCPNR techlib.\n");
+    log("        Defaults to: " MC_TECHLIB_DIR_DFL "\n");
     log("\n");
     log("    -run <from_label>[:<to_label>]\n");
     log("        only run the commands between the labels (see below). an empty\n");
@@ -80,7 +80,7 @@ struct SynthMcPass : public ScriptPass {
     log("\n");
   }
 
-  string top_module, fsm_opts, memory_opts, liberty_file;
+  string top_module, fsm_opts, memory_opts, techlib_path;
   bool autotop, flatten, nofsm, noshare;
 
   void clear_flags() override
@@ -93,7 +93,7 @@ struct SynthMcPass : public ScriptPass {
     flatten = false;
     nofsm = false;
     noshare = false;
-    liberty_file = MC_LIBERTY_FILE_DFL;
+    techlib_path = MC_TECHLIB_DIR_DFL;
   }
 
   void execute(std::vector<std::string> args, RTLIL::Design *design) override
@@ -134,12 +134,12 @@ struct SynthMcPass : public ScriptPass {
         flatten = true;
         continue;
       }
-      if (args[argidx] == "-liberty") {
+      if (args[argidx] == "-techlib") {
         if (argidx + 1 >= args.size()) {
-          log_cmd_error("-liberty must have an argument\n");
+          log_cmd_error("-techlib must have an argument\n");
           continue;
         }
-        liberty_file = args[++argidx];
+        techlib_path = args[++argidx];
         continue;
       }
       if (args[argidx] == "-nofsm") {
@@ -170,6 +170,7 @@ struct SynthMcPass : public ScriptPass {
   {
     if (check_label("begin"))
     {
+      run("read_verilog -lib " + techlib_path + "/cells_sim.v");
       if (help_mode) {
         run("hierarchy -check [-top <top> | -auto-top]");
       } else {
@@ -213,9 +214,9 @@ struct SynthMcPass : public ScriptPass {
       run("opt -full");
       run("techmap");
       run("opt -fast");
-      run("dfflibmap -liberty " + liberty_file);
+      run("dfflibmap -liberty " + techlib_path + "/minecraft.lib");
       run("opt -fast");
-      run("abc -liberty " + liberty_file);
+      run("abc -liberty " + techlib_path + "/minecraft.lib");
       run("opt -fast");
     }
 

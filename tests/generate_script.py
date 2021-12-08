@@ -5,7 +5,7 @@ import sys
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Yosys synthesis script generator for mcpnr test designs')
-    parser.add_argument('--liberty', required=True, help='Path to Minecraft liberty file')
+    parser.add_argument('--techlib', required=True, help='Path to Minecraft techlib')
     parser.add_argument('--plugin', required=True, help='Path to the synth_mc plugin')
     parser.add_argument('--output', required=True, help='Name of file to which protobuf-formatted design will be written')
     parser.add_argument('--verilog', action='append', help='Verilog file to read (may be specified more than once)')
@@ -23,8 +23,8 @@ def main():
         for verilog in args.verilog:
             o.write('read_verilog ' + verilog + '\n')
         o.write('plugin -i ' + args.plugin + '\n')
-        o.write('synth_mc -flatten -liberty ' + args.liberty + '\n')
-        o.write('stat -liberty ' + args.liberty + '\n')
+        o.write('synth_mc -flatten -techlib ' + args.techlib + '\n')
+        o.write('select -list\n')
         o.write('write_protobuf ' + args.output + '\n')
 
 if __name__ == '__main__':
