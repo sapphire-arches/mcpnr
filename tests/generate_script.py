@@ -24,7 +24,6 @@ def main():
             o.write('read_verilog ' + verilog + '\n')
         o.write('plugin -i ' + args.plugin + '\n')
         o.write('synth_mc -flatten -techlib ' + args.techlib + '\n')
-        o.write('select -list\n')
         o.write('write_protobuf ' + args.output + '\n')
 
 if __name__ == '__main__':
