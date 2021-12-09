@@ -1,14 +1,14 @@
 module top ();
   wire [3:0] cout;
-  wire clk;
+  wire clk, rst;
 
   MCPNR_SWITCHES #(
     .POS_X(0),
     .POS_Y(0),
     .POS_Z(0),
-    .NSWITCH(1),
+    .NSWITCH(2),
   ) input_switches (
-    .O({clk})
+    .O({clk, rst})
   );
 
   MCPNR_LIGHTS #(
@@ -20,15 +20,17 @@ module top ();
     .I({cout})
   );
 
-  test_counter dut (.CLK(clk), .COUNT(cout));
+  test_counter dut (.CLK(clk), .RST(rst), .COUNT(cout));
 endmodule
 
 module test_counter (
   input            CLK,
+  input            RST,
   output reg [3:0] COUNT,
 );
   always @(posedge CLK)
-  begin
-    COUNT <= COUNT + 1;
-  end
+    if (RST)
+      COUNT <= 4'd0;
+    else
+      COUNT <= COUNT + 4'd1;
 endmodule
