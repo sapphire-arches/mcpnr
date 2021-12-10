@@ -4,6 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/master";
     bt-yosys.url = "github:bobtwinkles/yosys/master";
+    amulet.url = "github:bobtwinkles/amulet-flake";
     flake-utils.url = "github:numtide/flake-utils";
     mozilla-overlay = {
       type = "github";
@@ -13,7 +14,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, mozilla-overlay, bt-yosys, flake-utils }:
+  outputs = { self, nixpkgs, amulet, mozilla-overlay, bt-yosys, flake-utils }:
     {
       mcpnr-rust-overlay = final: prev:
         let
@@ -58,6 +59,7 @@
               (import mozilla-overlay)
 
               bt-yosys.outputs.overlay
+              amulet.overlay
               self.mcpnr-rust-overlay
               self.overlay
             ];
@@ -68,35 +70,51 @@
         {
           packages = mcpnrPackages;
 
-          devShell = pkgs.mkShell {
-            name = "mcpnr-devel-shell";
+          devShell =
+            let pythonPackage = pkgs.python37.withPackages (pythonPackages: [
+              # For some reason we need to list all of these explicitly, I'm
+              # probaly doing something wrong in the amulet flake.
+              pythonPackages.numpy
+              pkgs.pymctranslate
+              pkgs.amulet-nbt
+              pkgs.amulet-core
+            ]);
+            in
+            pkgs.mkShell {
+              name = "mcpnr-devel-shell";
 
-            buildInputs = with pkgs; [
-              # For formatting Nix expressions
-              nixpkgs-fmt
+              buildInputs = with pkgs; [
+                # For formatting Nix expressions
+                nixpkgs-fmt
 
-              # For viewing intermediate Yosys outputs
-              xdot
-              graphviz
+                # For viewing intermediate Yosys outputs
+                xdot
+                graphviz
 
-              # Rust development
-              mcpnr-rust-platform.rust.cargo
-              (rust-analyzer.override {
-                rustPlatform = mcpnr-rust-platform;
-              })
-            ] ++ (pkgs.lib.concatMap (p: p.buildInputs) mcpnrPackagesList);
+                # For the script that converts placed outputs to Minecraft worlds
+                pythonPackage
 
-            nativeBuildInputs = with pkgs; [
-            ] ++ (pkgs.lib.concatMap (p: p.nativeBuildInputs) mcpnrPackagesList);
+                # Rust development
+                mcpnr-rust-platform.rust.cargo
+                (rust-analyzer.override {
+                  rustPlatform = mcpnr-rust-platform;
+                })
+              ] ++ (pkgs.lib.concatMap (p: p.buildInputs) mcpnrPackagesList);
 
-            shellHook = ''
-              # Need to expose the icon data directory so xdot can find icons
-              XDG_DATA_DIRS=$GSETTINGS_SCHEMAS_PATH:${pkgs.gnome.adwaita-icon-theme}/share
+              nativeBuildInputs = with pkgs; [
+              ] ++ (pkgs.lib.concatMap (p: p.nativeBuildInputs) mcpnrPackagesList);
 
-              export YOSYS_PROTO_PATH=${pkgs.yosys-proto}
-              RUST_SRC_PATH=${pkgs.mcpnr-rust-platform.rustLibSrc}
-            '';
-          };
+              shellHook = ''
+                # To pick up the specific version of Python we're using
+                PYTHONPATH=${pythonPackage}/${pythonPackage.sitePackages}
+
+                # Need to expose the icon data directory so xdot can find icons
+                XDG_DATA_DIRS=$GSETTINGS_SCHEMAS_PATH:${pkgs.gnome.adwaita-icon-theme}/share
+
+                export YOSYS_PROTO_PATH=${pkgs.yosys-proto}
+                RUST_SRC_PATH=${pkgs.mcpnr-rust-platform.rustLibSrc}
+              '';
+            };
 
           checks = { };
         }

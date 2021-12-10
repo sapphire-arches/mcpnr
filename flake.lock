@@ -1,9 +1,29 @@
 {
   "nodes": {
-    "bt-yosys": {
+    "amulet": {
       "inputs": {
+        "flake-utils": "flake-utils",
         "nix": "nix",
         "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1639106401,
+        "narHash": "sha256-QGgulI0sfBoIDCklcpiSs4uNwuYRXuYULTid6Hp2p3E=",
+        "owner": "bobtwinkles",
+        "repo": "amulet-flake",
+        "rev": "f5182a97f24801627c8024b28387b3f598f95a96",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bobtwinkles",
+        "repo": "amulet-flake",
+        "type": "github"
+      }
+    },
+    "bt-yosys": {
+      "inputs": {
+        "nix": "nix_2",
+        "nixpkgs": "nixpkgs_4"
       },
       "locked": {
         "lastModified": 1638742251,
@@ -35,7 +55,38 @@
         "type": "github"
       }
     },
+    "flake-utils_2": {
+      "locked": {
+        "lastModified": 1638122382,
+        "narHash": "sha256-sQzZzAbvKEqN9s0bzWuYmRaA03v40gaJ4+iL1LXjaeI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "74f7e4319258e287b0f9cb95426c9853b282730b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "lowdown-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1633514407,
+        "narHash": "sha256-Dw32tiMjdK9t3ETl5fzGrutQTzh2rufgZV4A/BbxuD4=",
+        "owner": "kristapsdz",
+        "repo": "lowdown",
+        "rev": "d2c2b44ff6c27b936ec27358a2653caaef8f73b8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "kristapsdz",
+        "repo": "lowdown",
+        "type": "github"
+      }
+    },
+    "lowdown-src_2": {
       "flake": false,
       "locked": {
         "lastModified": 1633514407,
@@ -73,6 +124,24 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
+        "lastModified": 1639077373,
+        "narHash": "sha256-vmJv6o8nxLpxXfNaFxS6CjEHQcyf/cKfe1rkIXonpEw=",
+        "owner": "NixOS",
+        "repo": "nix",
+        "rev": "c7b66caaca0833f0b88f3a93cbeaad73b4da1089",
+        "type": "github"
+      },
+      "original": {
+        "id": "nix",
+        "type": "indirect"
+      }
+    },
+    "nix_2": {
+      "inputs": {
+        "lowdown-src": "lowdown-src_2",
+        "nixpkgs": "nixpkgs_3"
+      },
+      "locked": {
         "lastModified": 1638447470,
         "narHash": "sha256-DREkiGilBlNzBqonvVrIBNSsYWv1PZuvfXFhaSGeXsM=",
         "owner": "NixOS",
@@ -102,6 +171,37 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "lastModified": 1639103690,
+        "narHash": "sha256-TswSxQUuT5TZWcG76g0ATetmUW++XdFGFi57qU4hxWw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "edbe8f43993c70c26bc4ab2fc9764756685f6c9e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "master",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
+        "lastModified": 1632864508,
+        "narHash": "sha256-d127FIvGR41XbVRDPVvozUPQ/uRHbHwvfyKHwEt5xFM=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "82891b5e2c2359d7e58d08849e4c89511ab94234",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "ref": "nixos-21.05-small",
+        "type": "indirect"
+      }
+    },
+    "nixpkgs_4": {
+      "locked": {
         "lastModified": 1638503331,
         "narHash": "sha256-IxVzpIfV/14HYJ5wlMa6Lq64d/GTG+syt5VD2oDdZiI=",
         "owner": "NixOS",
@@ -114,7 +214,7 @@
         "type": "indirect"
       }
     },
-    "nixpkgs_3": {
+    "nixpkgs_5": {
       "locked": {
         "lastModified": 1638741798,
         "narHash": "sha256-u6mir0D1ZkmhRnUX9EbB6/8mTEmn5FzcoPjrDL0LBDo=",
@@ -132,10 +232,11 @@
     },
     "root": {
       "inputs": {
+        "amulet": "amulet",
         "bt-yosys": "bt-yosys",
-        "flake-utils": "flake-utils",
+        "flake-utils": "flake-utils_2",
         "mozilla-overlay": "mozilla-overlay",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_5"
       }
     }
   },
