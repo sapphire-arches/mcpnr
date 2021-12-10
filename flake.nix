@@ -2,9 +2,14 @@
   description = "PnR for Minecraft";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/master";
-    bt-yosys.url = "github:bobtwinkles/yosys/master";
-    amulet.url = "github:bobtwinkles/amulet-flake";
+    bt-yosys = {
+      url = "github:bobtwinkles/yosys/master";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    amulet = {
+      url = "github:bobtwinkles/amulet-flake";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     flake-utils.url = "github:numtide/flake-utils";
     mozilla-overlay = {
       type = "github";
