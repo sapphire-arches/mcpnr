@@ -80,6 +80,10 @@
               # For some reason we need to list all of these explicitly, I'm
               # probaly doing something wrong in the amulet flake.
               pythonPackages.numpy
+              # xdot needs to be here or it chooses its own python version
+              # (3.9) and then numpy explodes horribly because we installed the
+              # numpy built against 3.7
+              pythonPackages.xdot
               pkgs.pymctranslate
               pkgs.amulet-nbt
               pkgs.amulet-core
@@ -93,7 +97,6 @@
                 nixpkgs-fmt
 
                 # For viewing intermediate Yosys outputs
-                xdot
                 graphviz
 
                 # For the script that converts placed outputs to Minecraft worlds
