@@ -5,9 +5,9 @@ package mcpnr;
 import 'yosys.proto';
 
 message Position {
-  int32 x = 1;
-  int32 y = 2;
-  int32 z = 3;
+  uint32 x = 1;
+  uint32 y = 2;
+  uint32 z = 3;
 }
 
 message PlacedDesign {

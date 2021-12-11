@@ -9,7 +9,7 @@ endif
 MODULE_TECHMAP_SCRIPT = $(MODULE_NAME).ys
 MODULE_TECHMAPPED = $(MODULE_NAME).yosys-design
 MODULE_PLACED = $(MODULE_NAME).mcpnr-placement
-MODULE_ROUTED = $(MODULE_NAME).nbt
+MODULE_ROUTED = $(MODULE_NAME).json
 
 EXTRA_FILES += yosys.log
 
@@ -45,6 +45,8 @@ PLACEMENT_TOOL ?= $(MCPNR_TARGET_DIR)/mcpnr-placement
 ROUTING_TOOL ?= $(MCPNR_TARGET_DIR)/mcpnr-routing
 ROUTING_TOOL_CMD ?= $(ROUTING_TOOL) --techlib $(SYNTH_MC_TECHLIB_DIR)
 
+INSTALL_TOOL ?= $(abspath $(current_dir)/../pnr/routed-to-world/convert.py)
+
 #
 # Meta targets
 #
@@ -60,15 +62,20 @@ clean:
 #
 # Utility targets
 #
+QUIET_CMD = @printf "[ %15s ] %s\n" $1 $@ &&
+
 decode-placed: $(MODULE_PLACED)
 	@protoc --decode=mcpnr.PlacedDesign \
 	  --descriptor_set_in=$$(find $(MCPNR_TARGET_DIR) -name 'file_descriptor_set.protobuf') \
 	 < $(MODULE_PLACED)
 
+WORLD_NAME ?=Designs
+install-to-world: $(MODULE_ROUTED) $(INSTALL_TOOL)
+	$(call QUIET_CMD,PYTHON3) $(PYTHON3) $(INSTALL_TOOL) $(MODULE_ROUTED) "${HOME}/.minecraft/saves/$(WORLD_NAME)"
+
 #
 # Actual build rules
 #
-QUIET_CMD = @printf "[ %15s ] %s\n" $1 $@ &&
 
 YOSYS_SCRIPT_GENERATE_CMD = $(PYTHON3) $(YOSYS_SCRIPT_GENERATE) \
   --techlib $(SYNTH_MC_TECHLIB_DIR) \

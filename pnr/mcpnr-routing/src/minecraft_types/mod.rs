@@ -4,22 +4,22 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct PaletteBlock {
-    name: String,
-    properties: Option<NbtCompound>,
+    pub name: String,
+    pub properties: Option<NbtCompound>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct StructureBlock {
-    state: i32,
-    pos: [i32; 3],
-    nbt: Option<NbtCompound>,
+    pub state: i32,
+    pub pos: [i32; 3],
+    pub nbt: Option<NbtCompound>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Structure {
     #[serde(rename = "DataVersion")]
-    data_version: i32,
-    size: [i32; 3],
-    palette: Vec<PaletteBlock>,
-    blocks: Vec<StructureBlock>,
+    pub data_version: i32,
+    pub size: [i32; 3],
+    pub palette: Vec<PaletteBlock>,
+    pub blocks: Vec<StructureBlock>,
 }
