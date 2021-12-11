@@ -1,0 +1,51 @@
+{
+  "palette": [
+    {
+      "name": "minecraft:calcite"
+    },
+    {
+      "name": "minecraft:oak_sign",
+      "properties": {
+        "rotation": "7",
+        "waterlogged": false
+      }
+    },
+    { "name": "minecraft:piston", "properties": {"facing": "north"} },
+    { "name": "minecraft:piston", "properties": {"facing": "east"} },
+    { "name": "minecraft:piston", "properties": {"facing": "south"} },
+    { "name": "minecraft:piston", "properties": {"facing": "west"} }
+  ],
+  "extents": {
+    "x": 2,
+    "y": 3,
+    "z": 2
+  },
+  "blocks": [
+    {"pi": 0},
+    {"pi": 0},
+    {"pi": 0},
+    {"pi": 0},
+
+    {
+      "pi": 1,
+      "namespace": "minecraft",
+      "base_name": "sign",
+      "nbt": {
+        "Color": "black",
+        "GlowingText": 0,
+        "Text1": "{ \"text\": \"A\" }",
+        "Text2": "{ \"text\": \"\" }",
+        "Text3": "{ \"text\": \"\" }",
+        "Text4": "{ \"text\": \"\" }"
+      }
+    },
+    {"pi": 0},
+    {"pi": 0},
+    {"pi": 0},
+
+    {"pi": 2},
+    {"pi": 3},
+    {"pi": 5},
+    {"pi": 4}
+  ]
+}
