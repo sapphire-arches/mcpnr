@@ -14,9 +14,9 @@ module top (
   );
 
   MCPNR_LIGHTS #(
-    .POS_X(0),
+    .POS_X(6),
     .POS_Y(0),
-    .POS_Z(6),
+    .POS_Z(0),
   ) output_lights (
     .I({y})
   );

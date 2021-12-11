@@ -1,7 +1,10 @@
+use anyhow::{Context, Result};
+use itertools::Itertools;
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::{PlacedDesign, Position};
 use mcpnr_common::protos::yosys::pb::parameter::Value as YPValue;
 use mcpnr_common::protos::yosys::pb::{Design, Parameter};
+use mcpnr_common::protos::CellExt;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
@@ -36,7 +39,7 @@ fn parse_args() -> Config {
     }
 }
 
-fn place(design: Design) -> PlacedDesign {
+fn place(design: Design) -> Result<PlacedDesign> {
     let cells = design
         .modules
         .into_values()
@@ -49,28 +52,52 @@ fn place(design: Design) -> PlacedDesign {
         .unwrap()
         .cell
         .into_iter()
-        .map(|(key, cell)| {
+        .map(|(key, cell)| -> Result<_> {
+            fn get_pos_attrs(
+                cell: &mcpnr_common::protos::yosys::pb::module::Cell,
+            ) -> Result<(u32, u32, u32)> {
+                Ok((
+                    cell.get_attrib_i64_with_default("POS_X", 0)
+                        .map_err(anyhow::Error::from)
+                        .and_then(|v| v.try_into().map_err(anyhow::Error::from))
+                        .with_context(|| "Read attr POS_X")?,
+                    cell.get_attrib_i64_with_default("POS_Y", 0)
+                        .map_err(anyhow::Error::from)
+                        .and_then(|v| v.try_into().map_err(anyhow::Error::from))
+                        .with_context(|| "Read attr POS_Y")?,
+                    cell.get_attrib_i64_with_default("POS_Z", 0)
+                        .map_err(anyhow::Error::from)
+                        .and_then(|v| v.try_into().map_err(anyhow::Error::from))
+                        .with_context(|| "Read attr POS_Z")?,
+                ))
+            }
+
+            let (x, y, z) = match cell.r#type.as_ref() {
+                "MCPNR_SWITCHES" | "MCPNR_LIGHTS" => get_pos_attrs(&cell)
+                    .with_context(|| format!("Getting position from cell {:?}", &cell))?,
+                _ => (10, 0, 0),
+            };
             let mcpnr_cell = mcpnr_common::protos::mcpnr::placed_design::Cell {
                 attribute: cell.attribute,
                 connection: cell.connection,
                 parameter: cell.parameter,
-                pos: Some(Position { x: 0, y: 0, z: 0 }),
+                pos: Some(Position { x, y, z }),
                 r#type: cell.r#type,
             };
-            mcpnr_cell
+            Ok(mcpnr_cell)
         })
-        .collect();
-    PlacedDesign {
+        .try_collect()?;
+    Ok(PlacedDesign {
         creator: format!(
             "Placed by MCPNR {}, Synth: {}",
             env!("CARGO_PKG_VERSION"),
             design.creator,
         ),
         cells,
-    }
+    })
 }
 
-fn main() {
+fn main() -> Result<()> {
     let config = parse_args();
 
     let design = {
@@ -78,7 +105,7 @@ fn main() {
         Design::decode(&inf[..]).unwrap()
     };
 
-    let placed_design = place(design);
+    let placed_design = place(design)?;
 
     {
         use std::io::Write;
@@ -87,4 +114,6 @@ fn main() {
 
         outf.write_all(&encoded[..]).unwrap();
     }
+
+    Ok(())
 }

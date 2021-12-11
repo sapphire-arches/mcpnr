@@ -212,6 +212,7 @@ dependencies = [
 name = "mcpnr-common"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "prost",
  "prost-build",
  "serde",
@@ -221,7 +222,9 @@ dependencies = [
 name = "mcpnr-placement"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
+ "itertools",
  "mcpnr-common",
 ]
 

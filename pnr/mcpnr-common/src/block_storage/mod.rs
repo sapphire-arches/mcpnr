@@ -4,14 +4,15 @@
 pub mod iter;
 mod serialization;
 
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::vec::Vec;
 
 // Should go down
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PropertyValue {
-    STR(String),
-    BYTE(i8),
+    String(String),
+    Byte(i8),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -30,9 +31,11 @@ impl Block {
 }
 
 pub struct BlockStorage {
-    /// 3D extents. If changing this is required then it must be done through a
-    /// proper function call because all the other fields rely on it staying
-    /// the same for the lifetime of this BlockStorage
+    /// 3D extents. If changing this is required then it must be done through
+    /// Self::resize because all the other fields rely on it staying
+    /// the same for the lifetime of this BlockStorage.
+    ///
+    /// Mutating this without using Self::resize may lead to UB when accessing the block storage.
     pub(self) extents: [u32; 3],
     /// Scale to use for Z coordinates when computing indicies
     pub(self) zsi: u32,
@@ -48,7 +51,10 @@ pub struct BlockStorage {
     pub(self) blocks: Vec<u32>,
 }
 
+/// Represents a type index into the BlockStorage's palette.
+// Must be repr(transparent) as we transmut &'a mut u32 to &'a mut BlockTypeIndex.
 #[repr(transparent)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct BlockTypeIndex(u32);
 
 impl BlockStorage {
@@ -73,6 +79,10 @@ impl BlockStorage {
         }
     }
 
+    pub fn resize(&mut self, sx: u32, sy: u32, sz: u32) -> Result<()> {
+        unimplemented!("Resizing BlockStorage {} {} {}", sx, sy, sz)
+    }
+
     pub fn iter_block_indicies(&self) -> iter::BlockIndexIter {
         iter::BlockIndexIter::new(self)
     }
@@ -92,8 +102,29 @@ impl BlockStorage {
     }
 
     #[inline]
-    pub fn set_block(&mut self, x: u32, y: u32, z: u32, bti: BlockTypeIndex) {
+    pub fn get_block_mut(&mut self, x: u32, y: u32, z: u32) -> Result<&mut BlockTypeIndex> {
+        if x >= self.extents[0] || y >= self.extents[1] || z >= self.extents[2] {
+            return Err(anyhow!(
+                "Block index out of bounds ({}, {}, {}) exceeds ({}, {}, {})",
+                x,
+                y,
+                z,
+                self.extents[0],
+                self.extents[1],
+                self.extents[2]
+            ));
+        }
+        debug_assert!(
+            self.blocks.len() as u32 == self.extents[0] * self.extents[1] * self.extents[2]
+        );
         let i = x + z * self.zsi + y * self.ysi;
-        self.blocks.get_mut(i as usize).map(|v| *v = bti.0);
+        // Safety:
+        //   index will be within self.blocks.len() due to the check against extents above
+        //   transmute from &'a mut i32 to &'a mut BlockTypeIndex is safe due to repr(transparent) on BlockTypeIndex
+        unsafe {
+            Ok(std::mem::transmute(
+                self.blocks.get_unchecked_mut(i as usize),
+            ))
+        }
     }
 }

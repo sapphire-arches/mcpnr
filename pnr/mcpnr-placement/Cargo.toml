@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1"
 clap = "2.34"
+itertools = "0.10"
 mcpnr-common = { path = "../mcpnr-common" }

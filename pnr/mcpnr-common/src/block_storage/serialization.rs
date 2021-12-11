@@ -9,8 +9,8 @@ impl Serialize for PropertyValue {
         S: Serializer,
     {
         match self {
-            Self::STR(st) => s.serialize_str(st),
-            Self::BYTE(b) => s.serialize_i8(*b),
+            Self::String(st) => s.serialize_str(st),
+            Self::Byte(b) => s.serialize_i8(*b),
         }
     }
 }
