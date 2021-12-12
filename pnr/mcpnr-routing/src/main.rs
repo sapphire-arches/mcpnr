@@ -1,11 +1,9 @@
-mod minecraft_types;
 mod splat;
 
 use anyhow::{Context, Result};
 use itertools::Itertools;
-use mcpnr_common::block_storage::{Block, BlockStorage};
+use mcpnr_common::block_storage::BlockStorage;
 use mcpnr_common::prost::Message;
-use mcpnr_common::protos::mcpnr::placed_design::Cell;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
 use splat::{SplattableStructure, Splatter};
 use std::collections::HashMap;

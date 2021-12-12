@@ -1,11 +1,11 @@
 //! Logic for rendering various modules into the world
 
-use crate::minecraft_types::Structure;
 use anyhow::{anyhow, Context, Result};
 use itertools::Itertools;
 use mcpnr_common::{
     block_storage::{Block, BlockStorage, BlockTypeIndex, PropertyValue},
-    protos::{mcpnr::placed_design::Cell, yosys::pb::parameter::Value, CellExt},
+    minecraft_types::Structure,
+    protos::{mcpnr::placed_design::Cell, CellExt},
 };
 use std::collections::HashMap;
 
