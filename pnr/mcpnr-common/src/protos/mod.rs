@@ -24,14 +24,14 @@ impl std::error::Error for CellGetAttribError {}
 
 pub trait CellExt {
     /// Get a numerical attribute from the cell, parsing it if it's a string.
-    fn get_attrib_i64(&self, name: &str) -> Result<i64, CellGetAttribError>;
+    fn get_param_i64(&self, name: &str) -> Result<i64, CellGetAttribError>;
 
-    fn get_attrib_i64_with_default(
+    fn get_param_i64_with_default(
         &self,
         name: &str,
         default: i64,
     ) -> Result<i64, CellGetAttribError> {
-        self.get_attrib_i64(name).or_else(|e| match e {
+        self.get_param_i64(name).or_else(|e| match e {
             CellGetAttribError::AttributeMissing => Ok(default),
             _ => Err(e),
         })
@@ -39,7 +39,7 @@ pub trait CellExt {
 }
 
 impl CellExt for yosys::pb::module::Cell {
-    fn get_attrib_i64(&self, name: &str) -> Result<i64, CellGetAttribError> {
+    fn get_param_i64(&self, name: &str) -> Result<i64, CellGetAttribError> {
         let value = self
             .parameter
             .get(name)
@@ -55,7 +55,7 @@ impl CellExt for yosys::pb::module::Cell {
 }
 
 impl CellExt for mcpnr::placed_design::Cell {
-    fn get_attrib_i64(&self, name: &str) -> Result<i64, CellGetAttribError> {
+    fn get_param_i64(&self, name: &str) -> Result<i64, CellGetAttribError> {
         let value = self
             .parameter
             .get(name)

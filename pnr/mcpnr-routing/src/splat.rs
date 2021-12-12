@@ -127,7 +127,7 @@ impl Splatter {
     }
 
     fn splat_lights(&self, cell: &Cell, o: &mut BlockStorage) -> Result<()> {
-        let nlights = cell.get_attrib_i64_with_default("NLIGHT", 1)?;
+        let nlights = cell.get_param_i64_with_default("NLIGHT", 1)?;
 
         let (base_x, base_y, base_z) = cell
             .pos
@@ -151,7 +151,7 @@ impl Splatter {
     }
 
     fn splat_switches(&self, cell: &Cell, o: &mut BlockStorage) -> Result<()> {
-        let nswitches = cell.get_attrib_i64_with_default("NSWITCH", 1)?;
+        let nswitches = cell.get_param_i64_with_default("NSWITCH", 1)?;
 
         let (base_x, base_y, base_z) = cell
             .pos

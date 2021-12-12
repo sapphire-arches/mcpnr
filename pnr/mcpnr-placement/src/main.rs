@@ -52,20 +52,20 @@ fn place(design: Design) -> Result<PlacedDesign> {
         .unwrap()
         .cell
         .into_iter()
-        .map(|(key, cell)| -> Result<_> {
+        .map(|(_, cell)| -> Result<_> {
             fn get_pos_attrs(
                 cell: &mcpnr_common::protos::yosys::pb::module::Cell,
             ) -> Result<(u32, u32, u32)> {
                 Ok((
-                    cell.get_attrib_i64_with_default("POS_X", 0)
+                    cell.get_param_i64_with_default("POS_X", 0)
                         .map_err(anyhow::Error::from)
                         .and_then(|v| v.try_into().map_err(anyhow::Error::from))
                         .with_context(|| "Read attr POS_X")?,
-                    cell.get_attrib_i64_with_default("POS_Y", 0)
+                    cell.get_param_i64_with_default("POS_Y", 0)
                         .map_err(anyhow::Error::from)
                         .and_then(|v| v.try_into().map_err(anyhow::Error::from))
                         .with_context(|| "Read attr POS_Y")?,
-                    cell.get_attrib_i64_with_default("POS_Z", 0)
+                    cell.get_param_i64_with_default("POS_Z", 0)
                         .map_err(anyhow::Error::from)
                         .and_then(|v| v.try_into().map_err(anyhow::Error::from))
                         .with_context(|| "Read attr POS_Z")?,
