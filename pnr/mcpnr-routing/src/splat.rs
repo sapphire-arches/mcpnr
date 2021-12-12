@@ -1,75 +1,21 @@
 //! Logic for rendering various modules into the world
 
 use anyhow::{anyhow, Context, Result};
-use itertools::Itertools;
 use mcpnr_common::{
     block_storage::{Block, BlockStorage, BlockTypeIndex, PropertyValue},
-    minecraft_types::Structure,
     protos::{mcpnr::placed_design::Cell, CellExt},
 };
 use std::collections::HashMap;
 
-pub struct SplattableStructure {
-    structure: Structure,
+use crate::structure_cache::StructureCache;
 
-    /// Map from the structure's palette to the output device
-    palette_palette_map: HashMap<i32, BlockTypeIndex>,
-}
-
-impl SplattableStructure {
-    pub fn new(base: Structure, o: &mut BlockStorage) -> Result<Self> {
-        let palette_palette_map = base
-            .palette
-            .iter()
-            .map(|block| -> Result<_> {
-                Ok(o.add_new_block_type(Block {
-                    name: block.name.clone(),
-                    properties: match block.properties.as_ref() {
-                        Some(c) => Some(
-                            c.inner()
-                                .iter()
-                                .map(|(k, v)| {
-                                    let v = match v {
-                                        quartz_nbt::NbtTag::Byte(ref v) => PropertyValue::Byte(*v),
-                                        quartz_nbt::NbtTag::String(ref s) => {
-                                            PropertyValue::String(s.to_owned())
-                                        }
-                                        _ => {
-                                            return Err(anyhow!(
-                                                "Unsupported property tag in mapping {:?}",
-                                                v
-                                            ))
-                                        }
-                                    };
-                                    Ok((k.to_owned(), v))
-                                })
-                                .try_collect()
-                                .with_context(|| format!("While mapping block {:?}", block))?,
-                        ),
-                        None => None,
-                    },
-                }))
-            })
-            .enumerate()
-            .map(|(idx, block)| -> Result<_> { Ok((idx as i32, block?)) })
-            .try_collect()
-            .with_context(|| format!("While mapping structure {:?}", base))?;
-
-        Ok(Self {
-            structure: base,
-            palette_palette_map,
-        })
-    }
-}
-
-pub struct Splatter {
-    gates: HashMap<String, SplattableStructure>,
-
+pub struct Splatter<'a> {
+    structure_cache: &'a StructureCache,
     common_blocks: HashMap<String, BlockTypeIndex>,
 }
 
-impl Splatter {
-    pub fn new(o: &mut BlockStorage, gates: HashMap<String, SplattableStructure>) -> Self {
+impl<'a> Splatter<'a> {
+    pub fn new(o: &mut BlockStorage, structure_cache: &'a StructureCache) -> Self {
         let common_blocks = [
             (
                 "calcite".to_owned(),
@@ -101,7 +47,7 @@ impl Splatter {
         .collect();
 
         Self {
-            gates,
+            structure_cache,
             common_blocks,
         }
     }
@@ -178,7 +124,7 @@ impl Splatter {
 
     fn splat_structure_cell(&self, cell: &Cell, o: &mut BlockStorage) -> Result<()> {
         let gate = self
-            .gates
+            .structure_cache
             .get(&cell.r#type)
             .ok_or_else(|| anyhow!("Unknown cell type {}", cell.r#type))?;
         let (base_x, base_y, base_z) = cell
