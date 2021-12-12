@@ -67,7 +67,7 @@ QUIET_CMD = @printf "[ %15s ] %s\n" $1 $@ &&
 
 decode-placed: $(MODULE_PLACED)
 	@protoc --decode=mcpnr.PlacedDesign \
-	  --descriptor_set_in=$$(find $(MCPNR_TARGET_DIR) -name 'file_descriptor_set.protobuf') \
+	  --descriptor_set_in=$$(find $(MCPNR_TARGET_DIR) -name 'file_descriptor_set.protobuf' | head -n 1) \
 	 < $(MODULE_PLACED)
 
 WORLD_NAME ?=Designs
