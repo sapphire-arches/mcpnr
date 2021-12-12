@@ -215,6 +215,7 @@ dependencies = [
  "anyhow",
  "prost",
  "prost-build",
+ "quartz_nbt",
  "serde",
 ]
 
@@ -226,6 +227,7 @@ dependencies = [
  "clap",
  "itertools",
  "mcpnr-common",
+ "quartz_nbt",
 ]
 
 [[package]]

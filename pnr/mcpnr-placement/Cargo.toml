@@ -8,3 +8,4 @@ anyhow = "1"
 clap = "2.34"
 itertools = "0.10"
 mcpnr-common = { path = "../mcpnr-common" }
+quartz_nbt = { version = "0.2", features = [ "serde" ] }
