@@ -149,18 +149,16 @@ impl CellFactory {
 }
 
 fn get_cell_pos(cell: &Cell) -> Result<(u32, u32, u32)> {
+    fn get_u32_param(cell: &Cell, name: &str) -> Result<u32> {
+        cell.get_param_i64_with_default(name, 0)
+            .context("Get param")?
+            .try_into()
+            .context("Downcast from i64")
+    }
+
     Ok((
-        cell.get_param_i64_with_default("POS_X", 0)
-            .map_err(anyhow::Error::from)
-            .and_then(|v| v.try_into().map_err(anyhow::Error::from))
-            .with_context(|| "Read attr POS_X")?,
-        cell.get_param_i64_with_default("POS_Y", 0)
-            .map_err(anyhow::Error::from)
-            .and_then(|v| v.try_into().map_err(anyhow::Error::from))
-            .with_context(|| "Read attr POS_Y")?,
-        cell.get_param_i64_with_default("POS_Z", 0)
-            .map_err(anyhow::Error::from)
-            .and_then(|v| v.try_into().map_err(anyhow::Error::from))
-            .with_context(|| "Read attr POS_Z")?,
+        get_u32_param(cell, "POS_X").context("Read POS_X")?,
+        get_u32_param(cell, "POS_Y").context("Read POS_Y")?,
+        get_u32_param(cell, "POS_Z").context("Read POS_Z")?,
     ))
 }
