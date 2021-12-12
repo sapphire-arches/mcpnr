@@ -32,4 +32,6 @@ message PlacedDesign {
         map<string, yosys.pb.BitVector> connection = 5;
     }
     repeated Cell cells = 3;
+
+    repeated yosys.pb.Module.Netname nets = 4;
 }

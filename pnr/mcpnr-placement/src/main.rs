@@ -129,6 +129,7 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
             env!("CARGO_PKG_VERSION"),
             design.creator,
         ),
+        nets: top_module.netname,
         cells,
     })
 }
