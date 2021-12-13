@@ -18,6 +18,10 @@ impl<'a> Splatter<'a> {
     pub fn new(o: &mut BlockStorage, structure_cache: &'a StructureCache) -> Self {
         let common_blocks = [
             (
+                "air".to_owned(),
+                o.add_new_block_type(Block::new("minecraft:air".to_owned())),
+            ),
+            (
                 "calcite".to_owned(),
                 o.add_new_block_type(Block::new("minecraft:calcite".to_owned())),
             ),
@@ -113,16 +117,24 @@ impl<'a> Splatter<'a> {
             .map(|p| (p.x, p.y, p.z))
             .unwrap_or((0, 0, 0));
 
+        let b_air = self.get_common_block("air")?;
         let b_calcite = self.get_common_block("calcite")?;
         let b_light = self.get_common_block("redstone_lamp")?;
 
         for light in 0..nlights {
             let light_x = (light * 2) as u32 + base_x;
 
+            *(o.get_block_mut(light_x + 0, base_y + 0, base_z + 0)?) = b_air;
+            *(o.get_block_mut(light_x + 0, base_y + 1, base_z + 0)?) = b_air;
+            *(o.get_block_mut(light_x + 1, base_y + 0, base_z + 0)?) = b_air;
+            *(o.get_block_mut(light_x + 1, base_y + 1, base_z + 0)?) = b_air;
+
             *(o.get_block_mut(light_x + 0, base_y + 0, base_z + 1)?) = b_calcite;
             *(o.get_block_mut(light_x + 0, base_y + 1, base_z + 1)?) = b_light;
             *(o.get_block_mut(light_x + 1, base_y + 0, base_z + 1)?) = b_calcite;
             *(o.get_block_mut(light_x + 1, base_y + 1, base_z + 1)?) = b_calcite;
+
+            *(o.get_block_mut(light_x + 0, base_y + 0, base_z + 2)?) = b_light;
         }
 
         Ok(())
@@ -137,18 +149,24 @@ impl<'a> Splatter<'a> {
             .map(|p| (p.x, p.y, p.z))
             .unwrap_or((0, 0, 0));
 
+        let b_air = self.get_common_block("air")?;
         let b_calcite = self.get_common_block("calcite")?;
         let b_switch = self.get_common_block("switch")?;
 
         for switch in 0..nswitches {
             let switch_x = (switch * 2) as u32 + base_x;
 
+            *(o.get_block_mut(switch_x + 0, base_y + 0, base_z + 0)?) = b_air;
             *(o.get_block_mut(switch_x + 0, base_y + 1, base_z + 0)?) = b_switch;
+            *(o.get_block_mut(switch_x + 1, base_y + 0, base_z + 0)?) = b_air;
+            *(o.get_block_mut(switch_x + 1, base_y + 1, base_z + 0)?) = b_air;
 
             *(o.get_block_mut(switch_x + 0, base_y + 0, base_z + 1)?) = b_calcite;
             *(o.get_block_mut(switch_x + 0, base_y + 1, base_z + 1)?) = b_calcite;
             *(o.get_block_mut(switch_x + 1, base_y + 0, base_z + 1)?) = b_calcite;
             *(o.get_block_mut(switch_x + 1, base_y + 1, base_z + 1)?) = b_calcite;
+
+            *(o.get_block_mut(switch_x + 0, base_y + 0, base_z + 2)?) = b_calcite;
         }
 
         Ok(())
