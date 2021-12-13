@@ -138,18 +138,23 @@ fn main() -> Result<()> {
     let config = parse_args();
 
     let design = {
-        let inf = std::fs::read(&config.input_file).unwrap();
-        Design::decode(&inf[..]).unwrap()
+        let inf = std::fs::read(&config.input_file)
+            .with_context(|| anyhow!("Open input file {:?}", config.input_file))?;
+        Design::decode(&inf[..])
+            .with_context(|| anyhow!("Failed to parse file {:?}", config.input_file))?
     };
 
-    let placed_design = place(&config, design)?;
+    let placed_design = place(&config, design)
+        .with_context(|| anyhow!("Place design from {:?}", config.input_file))?;
 
     {
         use std::io::Write;
-        let mut outf = std::fs::File::create(config.output_file).unwrap();
+        let mut outf = std::fs::File::create(&config.output_file)
+            .with_context(|| anyhow!("Failed to open/create output file {:?}", config.output_file))?;
         let encoded = placed_design.encode_to_vec();
 
-        outf.write_all(&encoded[..]).unwrap();
+        outf.write_all(&encoded[..])
+            .with_context(|| anyhow!("Failed to write to output file {:?}", config.output_file))?;
     }
 
     Ok(())
