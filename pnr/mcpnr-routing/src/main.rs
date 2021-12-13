@@ -76,8 +76,10 @@ fn do_splat(
     let splatter = Splatter::new(output_structure, structure_cache);
 
     for cell in design.cells.iter() {
-        splatter.splat_cell(cell, output_structure)?;
+        splatter.splat_cell(cell, output_structure).with_context(|| anyhow!("Error during cell splat {:?}", cell))?;
     }
+
+    splatter.draw_border(output_structure).context("Error during border draw")?;
 
     Ok(())
 }

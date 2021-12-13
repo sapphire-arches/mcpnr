@@ -42,6 +42,21 @@ impl<'a> Splatter<'a> {
                     ),
                 }),
             ),
+            (
+                "wool".to_owned(),
+                o.add_new_block_type(Block {
+                    name: "minecraft:black_wool".to_owned(),
+                    properties: None,
+                    // properties: Some(
+                    //     [(
+                    //         "color".to_owned(),
+                    //         PropertyValue::String("black".to_owned()),
+                    //     )]
+                    //     .into_iter()
+                    //     .collect(),
+                    // ),
+                }),
+            ),
         ]
         .into_iter()
         .collect();
@@ -52,8 +67,25 @@ impl<'a> Splatter<'a> {
         }
     }
 
-    ///  Splat a module with its minimum (x,y,z) coordinates at the provided
-    ///  location
+    pub fn draw_border(&self, o: &mut BlockStorage) -> Result<()> {
+        let extents = o.extents().clone();
+        let wool = self.get_common_block("wool").context("Look up wool")?;
+        for y in 0..extents[1] {
+            for x in 0..extents[0] {
+                *(o.get_block_mut(x, y, 0)?) = wool;
+                *(o.get_block_mut(x, y, extents[2] - 1)?) = wool;
+            }
+            for z in 0..extents[2] {
+                *(o.get_block_mut(0, y, z)?) = wool;
+                *(o.get_block_mut(extents[0] - 1, y, z)?) = wool;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Splat a module with its minimum (x,y,z) coordinates at the provided
+    /// location
     pub fn splat_cell(&self, cell: &Cell, o: &mut BlockStorage) -> Result<()> {
         (if cell.r#type == "MCPNR_LIGHTS" {
             self.splat_lights(cell, o)

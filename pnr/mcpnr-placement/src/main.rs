@@ -85,23 +85,31 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
     let mut cx = 0;
     let mut cz = 5;
     let mut row_max_z = 0;
+    let mut tier = 0;
 
     for (_, (cell, _)) in cells.iter_mut() {
         if cell.pos_locked {
             continue;
         }
-        if cx + cell.sx > 50 {
+        if cx + cell.sx > 192 {
             // TODO: don't hard code region size
             cz += row_max_z;
             row_max_z = 0;
             cx = 0;
         }
+        if cz > 192 {
+            tier += 1;
+            cx = 0;
+            cz = 0;
+        }
         cell.x = cx;
         cell.z = cz;
+        cell.y = tier * 16;
 
         cx += cell.sx;
         row_max_z = std::cmp::max(cell.sz, row_max_z);
     }
+    println!("Required tiers: {}", tier + 1);
 
     // Convert intermediate placement cells to output format
     let cells = cells

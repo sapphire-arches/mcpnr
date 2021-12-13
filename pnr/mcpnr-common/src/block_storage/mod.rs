@@ -101,6 +101,10 @@ impl BlockStorage {
         return BlockTypeIndex(iidx as u32);
     }
 
+    pub fn extents(&self) -> &[u32; 3] {
+        &self.extents
+    }
+
     #[inline]
     pub fn get_block_mut(&mut self, x: u32, y: u32, z: u32) -> Result<&mut BlockTypeIndex> {
         if x >= self.extents[0] || y >= self.extents[1] || z >= self.extents[2] {
