@@ -4,7 +4,6 @@ use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::{PlacedDesign, Position};
 use mcpnr_common::protos::yosys::pb::parameter::Value as YPValue;
 use mcpnr_common::protos::yosys::pb::{Design, Parameter};
-use mcpnr_common::protos::CellExt;
 use placement_cell::{CellFactory, PlacementCell};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -16,9 +15,11 @@ struct Config {
     input_file: PathBuf,
     output_file: PathBuf,
     structure_directory: PathBuf,
+    size_x: u32,
+    size_z: u32,
 }
 
-fn parse_args() -> Config {
+fn parse_args() -> Result<Config> {
     use clap::{App, Arg};
     let matches = App::new("MCPNR Placer")
         .version(env!("CARGO_PKG_VERSION"))
@@ -29,6 +30,18 @@ fn parse_args() -> Config {
                 .long("techlib")
                 .value_name("TECHLIB")
                 .required(true),
+        )
+        .arg(
+            Arg::with_name("SIZE_X")
+                .long("size-x")
+                .value_name("SIZE_X")
+                .default_value("192"),
+        )
+        .arg(
+            Arg::with_name("SIZE_Z")
+                .long("size-z")
+                .value_name("SIZE_Z")
+                .default_value("192"),
         )
         .arg(
             Arg::with_name("INPUT")
@@ -46,11 +59,21 @@ fn parse_args() -> Config {
 
     let techlib_directory = PathBuf::from(matches.value_of_os("TECHLIB").unwrap());
 
-    Config {
+    Ok(Config {
         input_file: PathBuf::from(matches.value_of_os("INPUT").unwrap()),
         output_file: PathBuf::from(matches.value_of_os("OUTPUT").unwrap()),
         structure_directory: techlib_directory.join("structures"),
-    }
+        size_x: matches
+            .value_of("SIZE_X")
+            .unwrap()
+            .parse()
+            .context("Parse SIZE_X")?,
+        size_z: matches
+            .value_of("SIZE_Z")
+            .unwrap()
+            .parse()
+            .context("Parse SIZE_Z")?,
+    })
 }
 
 fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
@@ -91,13 +114,13 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
         if cell.pos_locked {
             continue;
         }
-        if cx + cell.sx > 192 {
+        if cx + cell.sx > config.size_x {
             // TODO: don't hard code region size
             cz += row_max_z;
             row_max_z = 0;
             cx = 0;
         }
-        if cz > 192 {
+        if cz > config.size_z {
             tier += 1;
             cx = 0;
             cz = 0;
@@ -143,7 +166,7 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
 }
 
 fn main() -> Result<()> {
-    let config = parse_args();
+    let config = parse_args()?;
 
     let design = {
         let inf = std::fs::read(&config.input_file)
@@ -157,8 +180,9 @@ fn main() -> Result<()> {
 
     {
         use std::io::Write;
-        let mut outf = std::fs::File::create(&config.output_file)
-            .with_context(|| anyhow!("Failed to open/create output file {:?}", config.output_file))?;
+        let mut outf = std::fs::File::create(&config.output_file).with_context(|| {
+            anyhow!("Failed to open/create output file {:?}", config.output_file)
+        })?;
         let encoded = placed_design.encode_to_vec();
 
         outf.write_all(&encoded[..])

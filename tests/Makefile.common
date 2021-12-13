@@ -40,8 +40,17 @@ MCPNR_TECHLIB_FILES = \
 PYTHON3 ?= python3
 YOSYS_SCRIPT_GENERATE = $(abspath $(current_dir)/generate_script.py)
 
+ifndef MODULE_SIZE_X
+  MODULE_SIZE_X = 192
+endif
+ifndef MODULE_SIZE_Z
+  MODULE_SIZE_Z = 192
+endif
+
 PLACEMENT_TOOL ?= $(MCPNR_TARGET_DIR)/mcpnr-placement
-PLACEMENT_TOOL_CMD ?= $(PLACEMENT_TOOL) --techlib $(SYNTH_MC_TECHLIB_DIR)
+PLACEMENT_TOOL_CMD ?= $(PLACEMENT_TOOL) --techlib $(SYNTH_MC_TECHLIB_DIR) \
+    --size-x $(MODULE_SIZE_X) \
+    --size-z $(MODULE_SIZE_Z)
 
 ROUTING_TOOL ?= $(MCPNR_TARGET_DIR)/mcpnr-routing
 ROUTING_TOOL_CMD ?= $(ROUTING_TOOL) --techlib $(SYNTH_MC_TECHLIB_DIR)
