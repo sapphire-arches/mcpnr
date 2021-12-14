@@ -108,14 +108,16 @@ impl Router2D {
 
                     let mut min = self.score_grid[backtrack_pos_idx];
                     let mut min_pos = backtrack_pos;
-                    for neighbor in self.cell_neighbors(backtrack_pos) {
-                        println!("Consider neighbor {:?}", neighbor);
+                    self.for_each_neighbor(backtrack_pos, |neighbor| {
                         let score = self.score_grid[self.pos_to_idx(neighbor)?];
+                        println!("Consider neighbor {:?} ({} vs {})", neighbor, score, min);
                         if score < min {
                             min = score;
                             min_pos = neighbor;
                         }
-                    }
+
+                        Ok(())
+                    })?;
 
                     backtrack_pos = min_pos;
                 }
@@ -126,7 +128,7 @@ impl Router2D {
                 return Ok(())
             } else {
                 let cost = item.cost + 1;
-                for neighbor in self.cell_neighbors(item.pos) {
+                self.for_each_neighbor(item.pos, |neighbor| {
                     let idx = self.pos_to_idx(neighbor)?;
                     if cost < self.score_grid[idx]
                         && (self.grid[idx] == GridCell::Free
@@ -137,7 +139,9 @@ impl Router2D {
                             pos: neighbor,
                         })
                     }
-                }
+
+                    Ok(())
+                })?
             }
         }
 
@@ -185,37 +189,21 @@ impl Router2D {
         }
     }
 
-    fn cell_neighbors(&self, pos: Position) -> CellNeighbors {
-        let mut cn = CellNeighbors {
-            neighbors: [Position::new(0, 0); 4],
-            current_neighbor: 0,
-        };
+    fn for_each_neighbor(&self, pos: Position, mut f: impl FnMut(Position) -> Result<()>) -> Result<()> {
         if pos.x > 0 {
-            cn.neighbors[cn.current_neighbor as usize] = Position::new(pos.x - 1, pos.y);
-            cn.current_neighbor += 1;
+            f(Position::new(pos.x - 1, pos.y))?;
         }
         if pos.x + 1 < self.size_x {
-            cn.neighbors[cn.current_neighbor as usize] = Position::new(pos.x + 1, pos.y);
-            cn.current_neighbor += 1;
+            f(Position::new(pos.x + 1, pos.y))?;
         }
         if pos.y > 0 {
-            cn.neighbors[cn.current_neighbor as usize] = Position::new(pos.x, pos.y - 1);
-            cn.current_neighbor += 1;
+            f(Position::new(pos.x, pos.y - 1))?;
         }
         if pos.y + 1 < self.size_y {
-            cn.neighbors[cn.current_neighbor as usize] = Position::new(pos.x, pos.y + 1);
-            cn.current_neighbor += 1;
+            f(Position::new(pos.x, pos.y + 1))?;
         }
 
-        println!(
-            "Generated neighbors {:?} for {:?}",
-            &cn.neighbors[0..cn.current_neighbor as usize],
-            pos
-        );
-
-        cn.current_neighbor = cn.current_neighbor.wrapping_sub(1);
-
-        cn
+        Ok(())
     }
 }
 
@@ -239,26 +227,6 @@ impl Display for RoutingError {
                 "access out of bounds: ({}, {}) exceeds ({}, {})",
                 x, y, bx, by
             ),
-        }
-    }
-}
-
-struct CellNeighbors {
-    neighbors: [Position; 4],
-    current_neighbor: u8,
-}
-
-impl Iterator for CellNeighbors {
-    type Item = Position;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current_neighbor < 4 {
-            let ret = self.neighbors[self.current_neighbor as usize];
-            println!("Yield neighbor {:?} ({:?})", self.current_neighbor, ret);
-            self.current_neighbor = self.current_neighbor.wrapping_sub(1);
-            Some(ret)
-        } else {
-            None
         }
     }
 }
