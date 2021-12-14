@@ -1,6 +1,7 @@
 mod netlist;
 mod splat;
 mod structure_cache;
+mod routing_2d;
 
 use anyhow::{anyhow, Context, Result};
 use mcpnr_common::block_storage::BlockStorage;
