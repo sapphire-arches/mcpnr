@@ -16,7 +16,18 @@ impl Position {
     }
 }
 
-pub struct Router2D {}
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum GridCell {
+    Free,
+    Occupied(RouteId),
+}
+
+pub struct Router2D {
+    grid: Vec<GridCell>,
+    score_grid: Vec<u32>,
+    size_x: u32,
+    size_y: u32,
+}
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,25 +35,187 @@ pub struct RouteId(u32);
 
 impl Router2D {
     pub fn new(size_x: u32, size_y: u32) -> Self {
-        todo!()
+        let size = (size_x * size_y) as usize;
+        let mut grid = Vec::with_capacity(size);
+        grid.resize(size, GridCell::Free);
+        let mut score_grid = Vec::with_capacity(size);
+        score_grid.resize(size, 0);
+
+        Self {
+            grid,
+            score_grid,
+            size_x,
+            size_y,
+        }
     }
 
     pub fn route(&mut self, start: Position, end: Position, id: RouteId) -> Result<()> {
-        todo!()
+        // TODO: implement A* by adding an estimate to this
+        #[derive(PartialEq, Eq)]
+        struct RouteQueueItem {
+            cost: u32,
+            // TODO: Use routing grid indicies instead of positions
+            pos: Position,
+        }
+
+        impl PartialOrd for RouteQueueItem {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                // XXX: I don't think this works right, need to check std::cmp docs
+                return self
+                    .cost
+                    .partial_cmp(&other.cost)
+                    .or_else(|| self.pos.x.partial_cmp(&other.pos.x))
+                    .or_else(|| self.pos.y.partial_cmp(&other.pos.y));
+            }
+        }
+
+        impl Ord for RouteQueueItem {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                self.partial_cmp(other).unwrap()
+            }
+        }
+
+        // TODO: use some sort of inline marker to avoid needing to clear the full grid on every
+        // pass
+        // TODO: Use temporary just-right-sized routing grid instead of the full one
+        for score in self.score_grid.iter_mut() {
+            *score = std::u32::MAX;
+        }
+
+        // TODO: use a priority queue
+        let mut routing_queue = vec![RouteQueueItem {
+            cost: 0,
+            pos: start,
+        }];
+
+        while routing_queue.len() > 0 {
+            routing_queue.sort();
+            let item = routing_queue.remove(0);
+            let idx = self.pos_to_idx(item.pos)?;
+            // assert!(item.cost < self.score_grid[idx]);
+            if item.cost >= self.score_grid[idx] {
+                continue;
+            }
+            self.score_grid[idx] = item.cost;
+
+            if item.pos == end {
+                let mut backtrack_pos = item.pos;
+
+                while backtrack_pos != start {
+                    let backtrack_pos_idx = self.pos_to_idx(backtrack_pos)?;
+                    println!("Mark occupied {:?}", backtrack_pos);
+                    self.grid[backtrack_pos_idx] = GridCell::Occupied(id);
+
+                    let mut min = self.score_grid[backtrack_pos_idx];
+                    let mut min_pos = backtrack_pos;
+                    for neighbor in self.cell_neighbors(backtrack_pos) {
+                        println!("Consider neighbor {:?}", neighbor);
+                        let score = self.score_grid[self.pos_to_idx(neighbor)?];
+                        if score < min {
+                            min = score;
+                            min_pos = neighbor;
+                        }
+                    }
+
+                    backtrack_pos = min_pos;
+                }
+
+                let backtrack_pos_idx = self.pos_to_idx(backtrack_pos)?;
+                self.grid[backtrack_pos_idx] = GridCell::Occupied(id);
+
+                return Ok(())
+            } else {
+                let cost = item.cost + 1;
+                for neighbor in self.cell_neighbors(item.pos) {
+                    let idx = self.pos_to_idx(neighbor)?;
+                    if cost < self.score_grid[idx]
+                        && (self.grid[idx] == GridCell::Free
+                            || self.grid[idx] == GridCell::Occupied(id))
+                    {
+                        routing_queue.push(RouteQueueItem {
+                            cost,
+                            pos: neighbor,
+                        })
+                    }
+                }
+            }
+        }
+
+        Err(RoutingError::Unroutable)?
     }
 
     pub fn rip_up(&mut self, id: RouteId) -> Result<()> {
-        todo!()
+        for cell in self.grid.iter_mut() {
+            if *cell == GridCell::Occupied(id) {
+                *cell = GridCell::Free;
+            }
+        }
+
+        Ok(())
     }
 
     #[inline]
-    pub fn is_cell_occupied(&self, pos: Position) -> Result<RouteId> {
-        todo!()
+    pub fn is_cell_occupied(&self, pos: Position) -> Result<Option<RouteId>> {
+        Ok(self
+            .grid
+            .get(self.pos_to_idx(pos)?)
+            .and_then(|cell| match cell {
+                GridCell::Free => None,
+                GridCell::Occupied(item) => Some(*item),
+            }))
     }
 
     #[inline]
     pub fn mark_cell_occupied(&mut self, pos: Position, id: RouteId) -> Result<()> {
-        todo!()
+        let idx = self.pos_to_idx(pos)?;
+        self.grid[idx] = GridCell::Occupied(id);
+
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn pos_to_idx(&self, pos: Position) -> Result<usize> {
+        if pos.x >= self.size_x || pos.y >= self.size_y {
+            Err(RoutingError::OutOfBounds {
+                pos,
+                bounds: (self.size_x, self.size_y),
+            })?
+        } else {
+            Ok((pos.x + pos.y * self.size_x) as usize)
+        }
+    }
+
+    fn cell_neighbors(&self, pos: Position) -> CellNeighbors {
+        let mut cn = CellNeighbors {
+            neighbors: [Position::new(0, 0); 4],
+            current_neighbor: 0,
+        };
+        if pos.x > 0 {
+            cn.neighbors[cn.current_neighbor as usize] = Position::new(pos.x - 1, pos.y);
+            cn.current_neighbor += 1;
+        }
+        if pos.x + 1 < self.size_x {
+            cn.neighbors[cn.current_neighbor as usize] = Position::new(pos.x + 1, pos.y);
+            cn.current_neighbor += 1;
+        }
+        if pos.y > 0 {
+            cn.neighbors[cn.current_neighbor as usize] = Position::new(pos.x, pos.y - 1);
+            cn.current_neighbor += 1;
+        }
+        if pos.y + 1 < self.size_y {
+            cn.neighbors[cn.current_neighbor as usize] = Position::new(pos.x, pos.y + 1);
+            cn.current_neighbor += 1;
+        }
+
+        println!(
+            "Generated neighbors {:?} for {:?}",
+            &cn.neighbors[0..cn.current_neighbor as usize],
+            pos
+        );
+
+        cn.current_neighbor = cn.current_neighbor.wrapping_sub(1);
+
+        cn
     }
 }
 
@@ -66,6 +239,26 @@ impl Display for RoutingError {
                 "access out of bounds: ({}, {}) exceeds ({}, {})",
                 x, y, bx, by
             ),
+        }
+    }
+}
+
+struct CellNeighbors {
+    neighbors: [Position; 4],
+    current_neighbor: u8,
+}
+
+impl Iterator for CellNeighbors {
+    type Item = Position;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_neighbor < 4 {
+            let ret = self.neighbors[self.current_neighbor as usize];
+            println!("Yield neighbor {:?} ({:?})", self.current_neighbor, ret);
+            self.current_neighbor = self.current_neighbor.wrapping_sub(1);
+            Some(ret)
+        } else {
+            None
         }
     }
 }
