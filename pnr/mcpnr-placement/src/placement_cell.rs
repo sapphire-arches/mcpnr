@@ -113,7 +113,7 @@ impl CellFactory {
 
     pub fn build_switches<'design>(&mut self, cell: &Cell) -> Result<PlacementCell> {
         let (x, y, z) = get_cell_pos(cell)?;
-        let nswitches = cell.get_param_i64("NSWITCH")?;
+        let nswitches = cell.get_param_i64_with_default("NSWITCH", 1)?;
         Ok(PlacementCell {
             x,
             y,
@@ -127,7 +127,7 @@ impl CellFactory {
 
     pub fn build_lights<'design>(&mut self, cell: &Cell) -> Result<PlacementCell> {
         let (x, y, z) = get_cell_pos(cell)?;
-        let nlight = cell.get_param_i64("NLIGHT")?;
+        let nlight = cell.get_param_i64_with_default("NLIGHT", 1)?;
         Ok(PlacementCell {
             x,
             y,
