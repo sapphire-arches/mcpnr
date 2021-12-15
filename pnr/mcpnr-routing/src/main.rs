@@ -1,13 +1,14 @@
 mod netlist;
+mod routing_2d;
 mod splat;
 mod structure_cache;
-mod routing_2d;
 
 use anyhow::{anyhow, Context, Result};
-use mcpnr_common::block_storage::BlockStorage;
+use mcpnr_common::block_storage::{Block, BlockStorage};
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
 use netlist::Netlist;
+use routing_2d::{Position, RouteId, Router2D};
 use splat::Splatter;
 use std::path::PathBuf;
 use structure_cache::StructureCache;
@@ -89,6 +90,70 @@ fn do_splat(
     Ok(())
 }
 
+fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
+    let extents = output.extents().clone();
+    let router = {
+        let mut router = Router2D::new(extents[0], extents[2]);
+
+        for (net_idx, net) in netlist.iter_nets() {
+            let net_idx: u32 = (*net_idx)
+                .try_into()
+                .with_context(|| anyhow!("Convert net_idx {}", net_idx))?;
+            let mut drivers = net.iter_drivers(netlist);
+            let driver = drivers
+                .next()
+                .ok_or_else(|| anyhow!("Undriven net {:?}", net))?;
+            if drivers.next().is_some() {
+                return Err(anyhow!("Driver-Driver conflict in net {:?}", net));
+            }
+
+            let start = routing_2d::Position::new(driver.x, driver.z);
+
+            for sink in net.iter_sinks(netlist) {
+                let end = routing_2d::Position::new(sink.x, sink.z);
+
+                router.route(start, end, RouteId(net_idx))?;
+            }
+        }
+
+        router
+    };
+
+    let y = 4;
+    let b_wools = [
+        "minecraft:white_wool",
+        "minecraft:orange_wool",
+        "minecraft:magenta_wool",
+        "minecraft:light_blue_wool",
+        "minecraft:yellow_wool",
+        "minecraft:lime_wool",
+        "minecraft:pink_wool",
+        "minecraft:gray_wool",
+        "minecraft:light_gray_wool",
+        "minecraft:cyan_wool",
+        "minecraft:purple_wool",
+        "minecraft:blue_wool",
+        "minecraft:brown_wool",
+        "minecraft:green_wool",
+        "minecraft:red_wool",
+    ]
+    .into_iter()
+    .map(|ty| output.add_new_block_type(Block::new(ty.into())))
+    .collect::<Vec<_>>();
+
+    {
+        for z in 0..extents[2] {
+            for x in 0..extents[0] {
+                if let Some(net) = router.is_cell_occupied(Position::new(x, z))? {
+                    *(output.get_block_mut(x, y, z)?) = b_wools[(net.0 as usize) % b_wools.len()];
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn build_output(config: &Config, netlist: &Netlist) -> Result<BlockStorage> {
     let (mx, mz) = netlist.iter_pins().fold((0, 0), |(mx, mz), pin| {
         (std::cmp::max(mx, pin.x), std::cmp::max(mz, pin.z))
@@ -117,6 +182,8 @@ fn main() -> Result<()> {
         &structure_cache,
         &mut output_structure,
     )?;
+
+    do_route(&netlist, &mut output_structure)?;
 
     {
         let outf = std::fs::File::create(config.output_file).unwrap();

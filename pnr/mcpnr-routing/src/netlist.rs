@@ -27,8 +27,8 @@ pub struct Pin {
     pub direction: PinDirection,
 }
 
-#[derive(Default)]
-struct Net {
+#[derive(Default, Debug)]
+pub struct Net {
     drivers: Vec<u32>,
     sinks: Vec<u32>,
 }
@@ -103,6 +103,26 @@ impl Netlist {
 
     pub fn iter_pins(&self) -> impl Iterator<Item = &Pin> {
         self.pins.iter()
+    }
+
+    pub fn iter_nets(&self) -> impl Iterator<Item = (&i64, &Net)> {
+        self.nets.iter()
+    }
+}
+
+impl Net {
+    pub fn iter_drivers<'netlist>(
+        &'netlist self,
+        parent: &'netlist Netlist,
+    ) -> impl Iterator<Item = &'netlist Pin> {
+        self.drivers.iter().map(|idx| &parent.pins[*idx as usize])
+    }
+
+    pub fn iter_sinks<'netlist>(
+        &'netlist self,
+        parent: &'netlist Netlist,
+    ) -> impl Iterator<Item = &'netlist Pin> {
+        self.sinks.iter().map(|idx| &parent.pins[*idx as usize])
     }
 }
 

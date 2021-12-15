@@ -5,7 +5,7 @@ use std::fmt::Display;
 mod tests;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Position {
+pub struct Position {
     pub x: u32,
     pub y: u32,
 }
@@ -31,7 +31,7 @@ pub struct Router2D {
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RouteId(u32);
+pub struct RouteId(pub u32);
 
 impl Router2D {
     pub fn new(size_x: u32, size_y: u32) -> Self {
