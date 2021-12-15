@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use mcpnr_common::{minecraft_types::Structure, protos::yosys::pb::module::Cell, protos::CellExt};
 use std::{collections::HashMap, path::PathBuf};
 
@@ -99,9 +99,15 @@ impl CellFactory {
 
     pub fn build_cell(&mut self, cell: &Cell) -> Result<PlacementCell> {
         match cell.r#type.as_ref() {
-            "MCPNR_SWITCHES" => self.build_switches(cell),
-            "MCPNR_LIGHTS" => self.build_lights(cell),
-            _ => self.build_from_nbt(cell),
+            "MCPNR_SWITCHES" => self
+                .build_switches(cell)
+                .context("Failed to build switch module"),
+            "MCPNR_LIGHTS" => self
+                .build_lights(cell)
+                .context("Failed to build light module"),
+            _ => self
+                .build_from_nbt(cell)
+                .with_context(|| anyhow!("Failed to build {} module", cell.r#type)),
         }
     }
 

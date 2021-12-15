@@ -102,7 +102,8 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
                 ),
             ))
         })
-        .try_collect()?;
+        .try_collect()
+        .context("Failed to collect placement cells")?;
 
     // TODO: smart place
     let mut cx = 0;
