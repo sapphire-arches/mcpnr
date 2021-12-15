@@ -197,6 +197,44 @@ fn it_can_choose_among_identical_paths() -> Result<()> {
 }
 
 #[test]
+fn it_chooses_the_shortest_path() -> Result<()> {
+    let mut router = init(3, 4);
+
+    // s x x
+    // x 2 x
+    // x 2 x
+    // x e x
+
+    router.mark_cell_occupied(Position::new(1, 1), RouteId(2))?;
+    router.mark_cell_occupied(Position::new(1, 2), RouteId(2))?;
+
+    router.route(Position::new(0, 0), Position::new(1, 3), RouteId(1))?;
+
+    assert_eq!(
+        router.is_cell_occupied(Position::new(0, 0))?,
+        Some(RouteId(1))
+    );
+    assert_eq!(
+        router.is_cell_occupied(Position::new(0, 1))?,
+        Some(RouteId(1))
+    );
+    assert_eq!(
+        router.is_cell_occupied(Position::new(0, 2))?,
+        Some(RouteId(1))
+    );
+    assert_eq!(
+        router.is_cell_occupied(Position::new(0, 3))?,
+        Some(RouteId(1))
+    );
+    assert_eq!(
+        router.is_cell_occupied(Position::new(1, 3))?,
+        Some(RouteId(1))
+    );
+
+    Ok(())
+}
+
+#[test]
 fn it_can_rip_up_tracks() -> Result<()> {
     let mut router = init(1, 3);
     router.route(Position::new(0, 0), Position::new(0, 2), RouteId(1))?;
