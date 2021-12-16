@@ -129,7 +129,7 @@ impl Router2D {
                 let backtrack_pos_idx = self.pos_to_idx(backtrack_pos)?;
                 self.grid[backtrack_pos_idx] = GridCell::Occupied(id);
 
-                return Ok(())
+                return Ok(());
             } else {
                 let cost = item.cost + 1;
                 self.for_each_neighbor(item.pos, |neighbor| {
@@ -193,7 +193,11 @@ impl Router2D {
         }
     }
 
-    fn for_each_neighbor(&self, pos: Position, mut f: impl FnMut(Position) -> Result<()>) -> Result<()> {
+    fn for_each_neighbor(
+        &self,
+        pos: Position,
+        mut f: impl FnMut(Position) -> Result<()>,
+    ) -> Result<()> {
         if pos.x > 0 {
             f(Position::new(pos.x - 1, pos.y))?;
         }
