@@ -71,7 +71,11 @@ impl Router2D {
 
         impl Ord for RouteQueueItem {
             fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                self.partial_cmp(other).unwrap()
+                // self.partial_cmp(other).unwrap()
+                self.cost
+                    .cmp(&other.cost)
+                    .then(self.pos.x.cmp(&other.pos.x))
+                    .then(self.pos.y.cmp(&other.pos.y))
             }
         }
 
