@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::fmt::Display;
+use std::{collections::BinaryHeap, fmt::Display};
 
 #[cfg(test)]
 mod tests;
@@ -87,14 +87,14 @@ impl Router2D {
         }
 
         // TODO: use a priority queue
-        let mut routing_queue = vec![RouteQueueItem {
+        let mut routing_queue = BinaryHeap::new();
+
+        routing_queue.push(RouteQueueItem {
             cost: 0,
             pos: start,
-        }];
+        });
 
-        while routing_queue.len() > 0 {
-            routing_queue.sort();
-            let item = routing_queue.remove(0);
+        while let Some(item) = routing_queue.pop() {
             let idx = self.pos_to_idx(item.pos)?;
             // assert!(item.cost < self.score_grid[idx]);
             if item.cost >= self.score_grid[idx] {
