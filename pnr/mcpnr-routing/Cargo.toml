@@ -8,7 +8,9 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 clap = "2.34"
+env_logger = "0.8.4"
 itertools = "0.10"
+log = "0.4.0"
 mcpnr-common = { path = "../mcpnr-common" }
 quartz_nbt = { version = "0.2", features = [ "serde" ]}
 serde = { version = "1", features= [ "derive" ] }

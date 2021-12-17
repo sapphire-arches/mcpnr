@@ -3,6 +3,7 @@ use anyhow::Error;
 use super::*;
 
 fn init(size_x: u32, size_y: u32) -> Router2D {
+    let _ = env_logger::builder().is_test(true).try_init();
     Router2D::new(size_x, size_y)
 }
 
@@ -15,16 +16,17 @@ fn check_chain_for_error(
 
 fn print_router_grid(router: &Router2D) -> Result<()> {
     for y in 0..router.size_y {
+        let mut buf = String::new();
         for x in 0..router.size_x {
             let pos = Position::new(x, y);
             let idx = router.pos_to_idx(pos)?;
 
             match router.grid[idx] {
-                GridCell::Occupied(RouteId(i)) => print!("{} ", i),
-                GridCell::Free => print!("x "),
+                GridCell::Occupied(RouteId(i)) => buf.push_str(&format!("{} ", i)),
+                GridCell::Free => buf.push_str("x "),
             }
         }
-        println!()
+        log::info!("{}", buf);
     }
     Ok(())
 }
@@ -207,8 +209,10 @@ fn it_chooses_the_shortest_path() -> Result<()> {
 
     router.mark_cell_occupied(Position::new(1, 1), RouteId(2))?;
     router.mark_cell_occupied(Position::new(1, 2), RouteId(2))?;
+    print_router_grid(&router);
 
     router.route(Position::new(0, 0), Position::new(1, 3), RouteId(1))?;
+    print_router_grid(&router)?;
 
     assert_eq!(
         router.is_cell_occupied(Position::new(0, 0))?,

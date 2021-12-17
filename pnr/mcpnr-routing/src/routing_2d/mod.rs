@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::{collections::BinaryHeap, fmt::Display};
+use log::debug;
 
 #[cfg(test)]
 mod tests;
@@ -13,6 +14,12 @@ pub struct Position {
 impl Position {
     pub fn new(x: u32, y: u32) -> Self {
         Self { x, y }
+    }
+}
+
+impl Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
     }
 }
 
@@ -79,6 +86,8 @@ impl Router2D {
             }
         }
 
+        log::info!("Begin routing from {} to {}", start, end);
+
         // TODO: use some sort of inline marker to avoid needing to clear the full grid on every
         // pass
         // TODO: Use temporary just-right-sized routing grid instead of the full one
@@ -95,6 +104,7 @@ impl Router2D {
         });
 
         while let Some(item) = routing_queue.pop() {
+            debug!("Process queue item {} (cost: {})", item.pos, item.cost);
             let idx = self.pos_to_idx(item.pos)?;
             // assert!(item.cost < self.score_grid[idx]);
             if item.cost >= self.score_grid[idx] {
@@ -103,18 +113,19 @@ impl Router2D {
             self.score_grid[idx] = item.cost;
 
             if item.pos == end {
+                debug!("Begin backtrack");
                 let mut backtrack_pos = item.pos;
 
                 while backtrack_pos != start {
                     let backtrack_pos_idx = self.pos_to_idx(backtrack_pos)?;
-                    println!("Mark occupied {:?}", backtrack_pos);
+                    debug!("Mark occupied {:?}", backtrack_pos);
                     self.grid[backtrack_pos_idx] = GridCell::Occupied(id);
 
                     let mut min = self.score_grid[backtrack_pos_idx];
                     let mut min_pos = backtrack_pos;
                     self.for_each_neighbor(backtrack_pos, |neighbor| {
                         let score = self.score_grid[self.pos_to_idx(neighbor)?];
-                        println!("Consider neighbor {:?} ({} vs {})", neighbor, score, min);
+                        debug!("Consider neighbor {:?} ({} vs {})", neighbor, score, min);
                         if score < min {
                             min = score;
                             min_pos = neighbor;
@@ -138,6 +149,7 @@ impl Router2D {
                         && (self.grid[idx] == GridCell::Free
                             || self.grid[idx] == GridCell::Occupied(id))
                     {
+                        debug!("Pushing item for {} (cost: {})", neighbor, cost);
                         routing_queue.push(RouteQueueItem {
                             cost,
                             pos: neighbor,

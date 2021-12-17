@@ -163,6 +163,7 @@ fn build_output(config: &Config, netlist: &Netlist) -> Result<BlockStorage> {
 }
 
 fn main() -> Result<()> {
+    env_logger::init();
     let config = parse_args()?;
 
     let placed_design = {
