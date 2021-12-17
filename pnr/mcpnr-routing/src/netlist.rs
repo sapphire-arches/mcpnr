@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use mcpnr_common::protos::{mcpnr::PlacedDesign, yosys::pb::signal::Type};
 
 use crate::structure_cache::StructureCache;
@@ -20,6 +20,7 @@ pub struct PinMetadata {
     pub direction: PinDirection,
 }
 
+#[derive(Debug)]
 pub struct Pin {
     pub x: u32,
     pub y: u32,

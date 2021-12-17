@@ -4,11 +4,12 @@ mod splat;
 mod structure_cache;
 
 use anyhow::{anyhow, Context, Result};
+use log::warn;
 use mcpnr_common::block_storage::{Block, BlockStorage};
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
 use netlist::Netlist;
-use routing_2d::{Position, RouteId, Router2D};
+use routing_2d::{Position, RouteId, Router2D, RoutingError};
 use splat::Splatter;
 use std::path::PathBuf;
 use structure_cache::StructureCache;
@@ -93,7 +94,7 @@ fn do_splat(
 fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
     let extents = output.extents().clone();
     let router = {
-        let mut router = Router2D::new(extents[0], extents[2]);
+        let mut router = Router2D::new(extents[0] / 2, extents[2] / 2);
 
         for (net_idx, net) in netlist.iter_nets() {
             let net_idx: u32 = (*net_idx)
@@ -107,12 +108,20 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
                 return Err(anyhow!("Driver-Driver conflict in net {:?}", net));
             }
 
-            let start = routing_2d::Position::new(driver.x, driver.z);
+            let start = routing_2d::Position::new(driver.x / 2, driver.z / 2);
 
             for sink in net.iter_sinks(netlist) {
-                let end = routing_2d::Position::new(sink.x, sink.z);
+                let end = routing_2d::Position::new(sink.x / 2, sink.z / 2);
 
-                router.route(start, end, RouteId(net_idx))?;
+                match router.route(start, end, RouteId(net_idx)) {
+                    Ok(_) => {},
+                    Err(e) => if let Some(RoutingError::Unroutable) =  e.downcast_ref() {
+                        warn!("Failed to route net {:?} {:?}", driver, sink);
+                        continue;
+                    } else {
+                        return Err(e);
+                    }
+                }
             }
         }
 
@@ -144,7 +153,7 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
     {
         for z in 0..extents[2] {
             for x in 0..extents[0] {
-                if let Some(net) = router.is_cell_occupied(Position::new(x, z))? {
+                if let Some(net) = router.is_cell_occupied(Position::new(x / 2, z / 2))? {
                     *(output.get_block_mut(x, y, z)?) = b_wools[(net.0 as usize) % b_wools.len()];
                 }
             }
