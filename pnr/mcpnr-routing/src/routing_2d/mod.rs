@@ -67,20 +67,16 @@ impl Router2D {
 
         impl PartialOrd for RouteQueueItem {
             fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                // XXX: I don't think this works right, need to check std::cmp docs
-                return self
-                    .cost
-                    .partial_cmp(&other.cost)
-                    .or_else(|| self.pos.x.partial_cmp(&other.pos.x))
-                    .or_else(|| self.pos.y.partial_cmp(&other.pos.y));
+                Some(self.cmp(other))
             }
         }
 
         impl Ord for RouteQueueItem {
             fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                // self.partial_cmp(other).unwrap()
-                self.cost
-                    .cmp(&other.cost)
+                // We intentionally reverse the usual order of comparison for scores because we
+                // lower scores to be more important in the priority queue
+                other.cost
+                    .cmp(&self.cost)
                     .then(self.pos.x.cmp(&other.pos.x))
                     .then(self.pos.y.cmp(&other.pos.y))
             }
