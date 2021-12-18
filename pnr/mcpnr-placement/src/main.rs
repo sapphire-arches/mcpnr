@@ -107,7 +107,7 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
 
     // TODO: smart place
     let mut cx = 0;
-    let mut cz = 5;
+    let mut cz = 4;
     let mut row_max_z = 0;
     let mut tier = 0;
 

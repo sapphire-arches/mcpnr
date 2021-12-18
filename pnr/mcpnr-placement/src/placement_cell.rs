@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use mcpnr_common::{minecraft_types::Structure, protos::yosys::pb::module::Cell, protos::CellExt};
 use std::{collections::HashMap, path::PathBuf};
 
-pub const XZ_EXPANSION: u32 = 2;
+pub const XZ_EXPANSION: u32 = 0;
 
 struct PlacementStructureData {
     sx: u32,
@@ -120,7 +120,7 @@ impl CellFactory {
             z,
             sx: (nswitches as u32) * 2,
             sy: 2,
-            sz: 3,
+            sz: 4,
             pos_locked: true,
         })
     }
@@ -146,9 +146,9 @@ impl CellFactory {
             x: 0,
             y: 0,
             z: 0,
-            sx: sd.sx,
+            sx: sd.sx + (sd.sx % 2),
             sy: sd.sy,
-            sz: sd.sz,
+            sz: sd.sz + (sd.sz % 2),
             pos_locked: false,
         })
     }
