@@ -6,6 +6,7 @@ mod structure_cache;
 
 use anyhow::{anyhow, Context, Result};
 use detail_routing::{DetailRouter, GridCell, Position, RoutingError};
+use itertools::Itertools;
 use log::warn;
 use mcpnr_common::block_storage::{Block, BlockStorage};
 use mcpnr_common::prost::Message;
@@ -103,13 +104,40 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
 
     let router = {
         let mut router = DetailRouter::new(extents[0], extents[1], extents[2]);
+        let max_x = extents[0] as i32;
+        let max_y = extents[0] as i32;
+        let max_z = extents[0] as i32;
 
         for ((x, y, z), block) in output.iter_block_coords() {
             if (y % 16) > 8 {
                 continue;
             }
+            let x = x as i32;
+            let y = y as i32;
+            let z = z as i32;
             if block != b_air {
                 *(router.get_cell_mut(Position::new(x, y, z))?) = GridCell::Blocked;
+                /*
+                if y + 1 < max_y {
+                    *(router.get_cell_mut(Position::new(x, y + 1, z))?) = GridCell::Blocked;
+                }
+                if y + 2 < max_y {
+                    // TODO: we really only need +Y when the block is a torch or a piston
+                    *(router.get_cell_mut(Position::new(x, y + 2, z))?) = GridCell::Blocked;
+                }
+                if x > 1 {
+                    *(router.get_cell_mut(Position::new(x - 1, y, z))?) = GridCell::Blocked;
+                }
+                if x + 1 < max_x {
+                    *(router.get_cell_mut(Position::new(x + 1, y, z))?) = GridCell::Blocked;
+                }
+                if z > 0 {
+                    *(router.get_cell_mut(Position::new(x, y, z - 1))?) = GridCell::Blocked;
+                }
+                if z + 1 < max_z {
+                    *(router.get_cell_mut(Position::new(x, y, z + 1))?) = GridCell::Blocked;
+                }
+                */
             }
         }
 
@@ -129,7 +157,7 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
                 return Err(anyhow!("Driver-Driver conflict in net {:?}", net));
             }
 
-            let start = Position::new(driver.x, driver.y, driver.z);
+            let start = Position::new(driver.x as i32, driver.y as i32, driver.z as i32);
             if let GridCell::Occupied(RouteId(id)) = router.get_cell(start)? {
                 if id != &net_idx {
                     warn!(
@@ -141,7 +169,7 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
             *(router.get_cell_mut(start)?) = GridCell::Occupied(RouteId(net_idx));
 
             for sink in net.iter_sinks(netlist) {
-                let end = Position::new(sink.x, sink.y, sink.z);
+                let end = Position::new(sink.x as i32, sink.y as i32, sink.z as i32);
                 if let GridCell::Occupied(RouteId(id)) = router.get_cell(end)? {
                     if id != &net_idx {
                         warn!(
@@ -157,6 +185,9 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
                     Err(e) => {
                         if let Some(RoutingError::Unroutable) = e.downcast_ref() {
                             warn!("Failed to route net {:?} {:?}", driver, sink);
+                            for e in e.chain() {
+                                warn!(" because... {}", e)
+                            }
                             continue;
                         } else {
                             return Err(e);
@@ -169,7 +200,6 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
         router
     };
 
-    let y = 4;
     let b_wools = [
         "minecraft:white_wool",
         "minecraft:orange_wool",
@@ -211,6 +241,9 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
 
     {
         for ((x, y, z), block) in output.iter_block_coords_mut() {
+            let x = x as i32;
+            let y = y as i32;
+            let z = z as i32;
             match router
                 .get_cell(Position::new(x, y, z))
                 .context("Failed to get router cell in wire splat")?
@@ -221,6 +254,9 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
                 }
                 GridCell::Occupied(net) => {
                     *block = b_wools[(net.0 as usize) % b_wools.len()];
+                }
+                GridCell::Claimed(_) => {
+                    *block = b_glass;
                 }
             }
         }
