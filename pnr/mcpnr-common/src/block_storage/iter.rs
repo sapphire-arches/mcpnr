@@ -7,7 +7,7 @@ pub struct BlockIndexIter<'a> {
 impl<'a> BlockIndexIter<'a> {
     pub(super) fn new(parent: &'a BlockStorage) -> Self {
         Self {
-            inner: parent.blocks.iter()
+            inner: parent.blocks.iter(),
         }
     }
 }
