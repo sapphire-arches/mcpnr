@@ -24,6 +24,7 @@ fn print_router_grid(router: &Router2D) -> Result<()> {
             match router.grid[idx] {
                 GridCell::Occupied(RouteId(i)) => buf.push_str(&format!("{} ", i)),
                 GridCell::Free => buf.push_str("x "),
+                GridCell::Blocked => buf.push_str("B "),
             }
         }
         log::info!("{}", buf);
@@ -37,16 +38,16 @@ fn it_can_route_straight_lines() -> Result<()> {
     router.route(Position::new(0, 0), Position::new(0, 2), RouteId(1))?;
 
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 0))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 0))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 1))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 1))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 2))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 2))?,
+        &GridCell::Occupied(RouteId(1))
     );
 
     Ok(())
@@ -81,24 +82,24 @@ fn crossing_similar_net_succeeds() -> Result<()> {
     router.route(Position::new(0, 1), Position::new(2, 1), RouteId(1))?;
 
     assert_eq!(
-        router.is_cell_occupied(Position::new(1, 0))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(1, 0))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(1, 1))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(1, 1))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(1, 2))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(1, 2))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 1))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 1))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(2, 1))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(2, 1))?,
+        &GridCell::Occupied(RouteId(1))
     );
 
     Ok(())
@@ -148,49 +149,49 @@ fn it_can_choose_among_identical_paths() -> Result<()> {
     print_router_grid(&router)?;
 
     // Detect which of the possible paths were taken
-    let c_00 = router.is_cell_occupied(Position::new(0, 0))?;
-    let c_01 = router.is_cell_occupied(Position::new(0, 1))?;
-    let c_02 = router.is_cell_occupied(Position::new(0, 2))?;
-    let c_10 = router.is_cell_occupied(Position::new(1, 0))?;
-    let c_11 = router.is_cell_occupied(Position::new(1, 1))?;
-    let c_12 = router.is_cell_occupied(Position::new(1, 2))?;
-    let c_20 = router.is_cell_occupied(Position::new(2, 0))?;
-    let c_21 = router.is_cell_occupied(Position::new(2, 1))?;
-    let c_22 = router.is_cell_occupied(Position::new(2, 2))?;
+    let c_00 = router.get_cell(Position::new(0, 0))?;
+    let c_01 = router.get_cell(Position::new(0, 1))?;
+    let c_02 = router.get_cell(Position::new(0, 2))?;
+    let c_10 = router.get_cell(Position::new(1, 0))?;
+    let c_11 = router.get_cell(Position::new(1, 1))?;
+    let c_12 = router.get_cell(Position::new(1, 2))?;
+    let c_20 = router.get_cell(Position::new(2, 0))?;
+    let c_21 = router.get_cell(Position::new(2, 1))?;
+    let c_22 = router.get_cell(Position::new(2, 2))?;
 
     // Check endpoints
-    assert_eq!(c_00, Some(RouteId(1)));
-    assert_eq!(c_22, Some(RouteId(1)));
+    assert_eq!(c_00, &GridCell::Occupied(RouteId(1)));
+    assert_eq!(c_22, &GridCell::Occupied(RouteId(1)));
 
-    if let Some(c_20) = c_20 {
-        assert_eq!(c_20, RouteId(1));
+    if let GridCell::Occupied(c_20) = c_20 {
+        assert_eq!(c_20, &RouteId(1));
         // 1 1 1
         // x x 1
         // x x 1
-        assert_eq!(c_10, Some(RouteId(1)));
-        assert_eq!(c_21, Some(RouteId(1)));
-    } else if let Some(c_11) = c_11 {
-        assert_eq!(c_11, RouteId(1));
-        if let Some(c_10) = c_10 {
-            assert_eq!(c_10, RouteId(1));
+        assert_eq!(c_10, &GridCell::Occupied(RouteId(1)));
+        assert_eq!(c_21, &GridCell::Occupied(RouteId(1)));
+    } else if let GridCell::Occupied(c_11) = c_11 {
+        assert_eq!(c_11, &RouteId(1));
+        if let GridCell::Occupied(c_10) = c_10 {
+            assert_eq!(c_10, &RouteId(1));
             // 1 1 x
             // x 1 x
             // x 1 1
-            assert_eq!(c_12, Some(RouteId(1)));
-        } else if let Some(c_01) = c_01 {
-            assert_eq!(c_01, RouteId(1));
+            assert_eq!(c_12, &GridCell::Occupied(RouteId(1)));
+        } else if let GridCell::Occupied(c_01) = c_01 {
+            assert_eq!(c_01, &RouteId(1));
             // 1 x x
             // 1 1 1
             // x x 1
-            assert_eq!(c_21, Some(RouteId(1)));
+            assert_eq!(c_21, &GridCell::Occupied(RouteId(1)));
         }
-    } else if let Some(c_02) = c_02 {
-        assert_eq!(c_02, RouteId(1));
+    } else if let GridCell::Occupied(c_02) = c_02 {
+        assert_eq!(c_02, &RouteId(1));
         // 1 x x
         // 1 x x
         // 1 1 1
-        assert_eq!(c_01, Some(RouteId(1)));
-        assert_eq!(c_12, Some(RouteId(1)));
+        assert_eq!(c_01, &GridCell::Occupied(RouteId(1)));
+        assert_eq!(c_12, &GridCell::Occupied(RouteId(1)));
     } else {
         panic!("No valid route detected");
     }

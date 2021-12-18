@@ -74,12 +74,18 @@ impl<'a> Splatter<'a> {
     pub fn draw_border(&self, o: &mut BlockStorage) -> Result<()> {
         let extents = o.extents().clone();
         let wool = self.get_common_block("wool").context("Look up wool")?;
-        for y in 0..extents[1] {
+        for y in 9..extents[1] {
             for x in 0..extents[0] {
+                if ((x / 2) + (y / 2)) % 2 == 1 {
+                    continue;
+                }
                 *(o.get_block_mut(x, y, 0)?) = wool;
                 *(o.get_block_mut(x, y, extents[2] - 1)?) = wool;
             }
             for z in 0..extents[2] {
+                if ((z / 2) + (y / 2)) % 2 == 1 {
+                    continue;
+                }
                 *(o.get_block_mut(0, y, z)?) = wool;
                 *(o.get_block_mut(extents[0] - 1, y, z)?) = wool;
             }

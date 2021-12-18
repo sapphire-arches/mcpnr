@@ -1,6 +1,6 @@
 use anyhow::Result;
-use std::{collections::BinaryHeap, fmt::Display};
 use log::debug;
+use std::{collections::BinaryHeap, fmt::Display};
 
 #[cfg(test)]
 mod tests;
@@ -24,8 +24,12 @@ impl Display for Position {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum GridCell {
+pub enum GridCell {
+    /// Completely free
     Free,
+    /// Blocked by something (e.g. part of the guts of a cell
+    Blocked,
+    /// Occupied by a net with the given RouteID
     Occupied(RouteId),
 }
 
@@ -75,7 +79,8 @@ impl Router2D {
             fn cmp(&self, other: &Self) -> std::cmp::Ordering {
                 // We intentionally reverse the usual order of comparison for scores because we
                 // lower scores to be more important in the priority queue
-                other.cost
+                other
+                    .cost
                     .cmp(&self.cost)
                     .then(self.pos.x.cmp(&other.pos.x))
                     .then(self.pos.y.cmp(&other.pos.y))
@@ -171,22 +176,15 @@ impl Router2D {
     }
 
     #[inline]
-    pub fn is_cell_occupied(&self, pos: Position) -> Result<Option<RouteId>> {
-        Ok(self
-            .grid
-            .get(self.pos_to_idx(pos)?)
-            .and_then(|cell| match cell {
-                GridCell::Free => None,
-                GridCell::Occupied(item) => Some(*item),
-            }))
+    pub fn get_cell(&self, pos: Position) -> Result<&GridCell> {
+        // Unwrap is ok because pos_to_idx does bounds checking
+        Ok(self.grid.get(self.pos_to_idx(pos)?).unwrap())
     }
 
     #[inline]
-    pub fn mark_cell_occupied(&mut self, pos: Position, id: RouteId) -> Result<()> {
+    pub fn get_cell_mut(&mut self, pos: Position) -> Result<&mut GridCell> {
         let idx = self.pos_to_idx(pos)?;
-        self.grid[idx] = GridCell::Occupied(id);
-
-        Ok(())
+        Ok(self.grid.get_mut(idx).unwrap())
     }
 
     #[inline(always)]

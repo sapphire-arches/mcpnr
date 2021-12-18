@@ -143,7 +143,7 @@ fn pin_metadata(
             Ok(PinMetadata {
                 offset_x: (bit_idx as u32) * 2,
                 offset_y: 1,
-                offset_z: 1,
+                offset_z: 2,
                 sig_derating: 0,
                 direction: PinDirection::Input,
             })

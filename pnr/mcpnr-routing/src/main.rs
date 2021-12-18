@@ -3,13 +3,13 @@ mod routing_2d;
 mod splat;
 mod structure_cache;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use log::warn;
 use mcpnr_common::block_storage::{Block, BlockStorage};
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
 use netlist::Netlist;
-use routing_2d::{Position, RouteId, Router2D, RoutingError};
+use routing_2d::{GridCell, Position, RouteId, Router2D, RoutingError};
 use splat::Splatter;
 use std::path::PathBuf;
 use structure_cache::StructureCache;
@@ -93,8 +93,20 @@ fn do_splat(
 
 fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
     let extents = output.extents().clone();
+
+    let b_air = output.add_new_block_type(Block::new("minecraft:air".into()));
+
     let router = {
-        let mut router = Router2D::new(extents[0] / 2, extents[2] / 2);
+        let mut router = Router2D::new((extents[0] + 1) / 2, (extents[2] + 1) / 2);
+
+        for ((x, y, z), block) in output.iter_block_coords() {
+            if (y % 16) > 8 {
+                continue;
+            }
+            if block != b_air {
+                *(router.get_cell_mut(Position::new(x / 2, z / 2))?) = GridCell::Blocked;
+            }
+        }
 
         for (net_idx, net) in netlist.iter_nets() {
             let net_idx: u32 = (*net_idx)
@@ -109,17 +121,37 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
             }
 
             let start = routing_2d::Position::new(driver.x / 2, driver.z / 2);
+            if let GridCell::Occupied(RouteId(id)) = router.get_cell(start)? {
+                if id != &net_idx {
+                    warn!(
+                        "Starting position of net {} at {} is occupied by another net {}",
+                        net_idx, start, id
+                    )
+                }
+            }
+            *(router.get_cell_mut(start)?) = GridCell::Occupied(RouteId(net_idx));
 
             for sink in net.iter_sinks(netlist) {
                 let end = routing_2d::Position::new(sink.x / 2, sink.z / 2);
+                if let GridCell::Occupied(RouteId(id)) = router.get_cell(end)? {
+                    if id != &net_idx {
+                        warn!(
+                            "Ending position of net {} at {} is occupied by another net {}",
+                            net_idx, end, id
+                        );
+                    }
+                }
+                *(router.get_cell_mut(end)?) = GridCell::Occupied(RouteId(net_idx));
 
                 match router.route(start, end, RouteId(net_idx)) {
-                    Ok(_) => {},
-                    Err(e) => if let Some(RoutingError::Unroutable) =  e.downcast_ref() {
-                        warn!("Failed to route net {:?} {:?}", driver, sink);
-                        continue;
-                    } else {
-                        return Err(e);
+                    Ok(_) => {}
+                    Err(e) => {
+                        if let Some(RoutingError::Unroutable) = e.downcast_ref() {
+                            warn!("Failed to route net {:?} {:?}", driver, sink);
+                            continue;
+                        } else {
+                            return Err(e);
+                        }
                     }
                 }
             }
@@ -149,12 +181,20 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
     .into_iter()
     .map(|ty| output.add_new_block_type(Block::new(ty.into())))
     .collect::<Vec<_>>();
+    let b_glass = output.add_new_block_type(Block::new("minecraft:glass".into()));
 
     {
         for z in 0..extents[2] {
             for x in 0..extents[0] {
-                if let Some(net) = router.is_cell_occupied(Position::new(x / 2, z / 2))? {
-                    *(output.get_block_mut(x, y, z)?) = b_wools[(net.0 as usize) % b_wools.len()];
+                match router.get_cell(Position::new(x / 2, z / 2))? {
+                    routing_2d::GridCell::Free => {}
+                    routing_2d::GridCell::Blocked => {
+                        *(output.get_block_mut(x, y, z)?) = b_glass;
+                    }
+                    routing_2d::GridCell::Occupied(net) => {
+                        *(output.get_block_mut(x, y, z)?) =
+                            b_wools[(net.0 as usize) % b_wools.len()];
+                    }
                 }
             }
         }
