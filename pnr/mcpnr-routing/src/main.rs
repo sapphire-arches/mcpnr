@@ -3,7 +3,7 @@ mod routing_2d;
 mod splat;
 mod structure_cache;
 
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use log::warn;
 use mcpnr_common::block_storage::{Block, BlockStorage};
 use mcpnr_common::prost::Message;
@@ -113,9 +113,13 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
                 .try_into()
                 .with_context(|| anyhow!("Convert net_idx {}", net_idx))?;
             let mut drivers = net.iter_drivers(netlist);
-            let driver = drivers
-                .next()
-                .ok_or_else(|| anyhow!("Undriven net {:?}", net))?;
+            let driver = match drivers.next() {
+                Some(driver) => driver,
+                None => {
+                    warn!("Undriven net {:?}", net);
+                    continue;
+                }
+            };
             if drivers.next().is_some() {
                 return Err(anyhow!("Driver-Driver conflict in net {:?}", net));
             }
