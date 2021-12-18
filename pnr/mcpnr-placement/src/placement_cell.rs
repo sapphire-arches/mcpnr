@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use mcpnr_common::{minecraft_types::Structure, protos::yosys::pb::module::Cell, protos::CellExt};
 use std::{collections::HashMap, path::PathBuf};
 
-pub const XZ_EXPANSION: u32 = 0;
+pub const XZ_EXPANSION: u32 = 2;
 
 struct PlacementStructureData {
     sx: u32,
