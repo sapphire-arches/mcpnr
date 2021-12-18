@@ -87,6 +87,10 @@ impl BlockStorage {
         iter::BlockIndexIter::new(self)
     }
 
+    pub fn iter_block_coords(&self) -> iter::BlockCoordIter {
+        iter::BlockCoordIter::new(self)
+    }
+
     pub fn add_new_block_type(&mut self, b: Block) -> BlockTypeIndex {
         // Very stupid implementation. Only fix if it shows up in a profile
         // because there will probably never be more than like 30 entries in
@@ -103,6 +107,33 @@ impl BlockStorage {
 
     pub fn extents(&self) -> &[u32; 3] {
         &self.extents
+    }
+
+    #[inline]
+    pub fn get_block(&self, x: u32, y: u32, z: u32) -> Result<&BlockTypeIndex> {
+        if x >= self.extents[0] || y >= self.extents[1] || z >= self.extents[2] {
+            return Err(anyhow!(
+                "Block index out of bounds ({}, {}, {}) exceeds ({}, {}, {})",
+                x,
+                y,
+                z,
+                self.extents[0],
+                self.extents[1],
+                self.extents[2]
+            ));
+        }
+        debug_assert!(
+            self.blocks.len() as u32 == self.extents[0] * self.extents[1] * self.extents[2]
+        );
+        let i = x + z * self.zsi + y * self.ysi;
+        // Safety:
+        //   index will be within self.blocks.len() due to the check against extents above
+        //   transmute from &'a i32 to &'a BlockTypeIndex is safe due to repr(transparent) on BlockTypeIndex
+        unsafe {
+            Ok(std::mem::transmute(
+                self.blocks.get_unchecked(i as usize),
+            ))
+        }
     }
 
     #[inline]
