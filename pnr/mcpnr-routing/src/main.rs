@@ -1,18 +1,23 @@
+mod detail_routing;
 mod netlist;
 mod routing_2d;
 mod splat;
 mod structure_cache;
 
 use anyhow::{anyhow, Context, Result};
+use detail_routing::{DetailRouter, GridCell, Position, RoutingError};
 use log::warn;
 use mcpnr_common::block_storage::{Block, BlockStorage};
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
 use netlist::Netlist;
-use routing_2d::{GridCell, Position, RouteId, Router2D, RoutingError};
 use splat::Splatter;
 use std::path::PathBuf;
 use structure_cache::StructureCache;
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RouteId(pub u32);
 
 #[derive(Clone, Debug)]
 struct Config {
@@ -97,14 +102,14 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
     let b_air = output.add_new_block_type(Block::new("minecraft:air".into()));
 
     let router = {
-        let mut router = Router2D::new((extents[0] + 1) / 2, (extents[2] + 1) / 2);
+        let mut router = DetailRouter::new(extents[0], extents[1], extents[2]);
 
         for ((x, y, z), block) in output.iter_block_coords() {
             if (y % 16) > 8 {
                 continue;
             }
             if block != b_air {
-                *(router.get_cell_mut(Position::new(x / 2, z / 2))?) = GridCell::Blocked;
+                *(router.get_cell_mut(Position::new(x, y, z))?) = GridCell::Blocked;
             }
         }
 
@@ -124,7 +129,7 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
                 return Err(anyhow!("Driver-Driver conflict in net {:?}", net));
             }
 
-            let start = routing_2d::Position::new(driver.x / 2, driver.z / 2);
+            let start = Position::new(driver.x, driver.y, driver.z);
             if let GridCell::Occupied(RouteId(id)) = router.get_cell(start)? {
                 if id != &net_idx {
                     warn!(
@@ -136,7 +141,7 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
             *(router.get_cell_mut(start)?) = GridCell::Occupied(RouteId(net_idx));
 
             for sink in net.iter_sinks(netlist) {
-                let end = routing_2d::Position::new(sink.x / 2, sink.z / 2);
+                let end = Position::new(sink.x, sink.y, sink.z);
                 if let GridCell::Occupied(RouteId(id)) = router.get_cell(end)? {
                     if id != &net_idx {
                         warn!(
@@ -205,17 +210,17 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
     let b_glass = output.add_new_block_type(Block::new("minecraft:glass".into()));
 
     {
-        for z in 0..extents[2] {
-            for x in 0..extents[0] {
-                match router.get_cell(Position::new(x / 2, z / 2))? {
-                    routing_2d::GridCell::Free => {}
-                    routing_2d::GridCell::Blocked => {
-                        *(output.get_block_mut(x, y, z)?) = b_glass;
-                    }
-                    routing_2d::GridCell::Occupied(net) => {
-                        *(output.get_block_mut(x, y, z)?) =
-                            b_wools[(net.0 as usize) % b_wools.len()];
-                    }
+        for ((x, y, z), block) in output.iter_block_coords_mut() {
+            match router
+                .get_cell(Position::new(x, y, z))
+                .context("Failed to get router cell in wire splat")?
+            {
+                GridCell::Free => {}
+                GridCell::Blocked => {
+                    // *block = b_glass;
+                }
+                GridCell::Occupied(net) => {
+                    *block = b_wools[(net.0 as usize) % b_wools.len()];
                 }
             }
         }
@@ -233,7 +238,7 @@ fn build_output(config: &Config, netlist: &Netlist) -> Result<BlockStorage> {
 }
 
 fn main() -> Result<()> {
-    env_logger::init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let config = parse_args()?;
 
     let placed_design = {
