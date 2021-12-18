@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, ensure, Context, Result};
+use itertools::Itertools;
 use mcpnr_common::protos::{mcpnr::PlacedDesign, yosys::pb::signal::Type};
 
 use crate::structure_cache::StructureCache;
@@ -95,6 +96,11 @@ impl Netlist {
             }
         }
 
+        for net in design_nets.values_mut() {
+            net.drivers.sort();
+            net.sinks.sort();
+        }
+
         pins.shrink_to_fit();
         Ok(Netlist {
             pins,
@@ -107,7 +113,7 @@ impl Netlist {
     }
 
     pub fn iter_nets(&self) -> impl Iterator<Item = (&i64, &Net)> {
-        self.nets.iter()
+        self.nets.iter().sorted_by_key(|f| f.0)
     }
 }
 
