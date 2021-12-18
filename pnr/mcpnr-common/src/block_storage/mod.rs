@@ -91,6 +91,10 @@ impl BlockStorage {
         iter::BlockCoordIter::new(self)
     }
 
+    pub fn iter_block_coords_mut(&mut self) -> iter::BlockCoordMutIter {
+        iter::BlockCoordMutIter::new(self)
+    }
+
     pub fn add_new_block_type(&mut self, b: Block) -> BlockTypeIndex {
         // Very stupid implementation. Only fix if it shows up in a profile
         // because there will probably never be more than like 30 entries in
@@ -129,11 +133,7 @@ impl BlockStorage {
         // Safety:
         //   index will be within self.blocks.len() due to the check against extents above
         //   transmute from &'a i32 to &'a BlockTypeIndex is safe due to repr(transparent) on BlockTypeIndex
-        unsafe {
-            Ok(std::mem::transmute(
-                self.blocks.get_unchecked(i as usize),
-            ))
-        }
+        unsafe { Ok(std::mem::transmute(self.blocks.get_unchecked(i as usize))) }
     }
 
     #[inline]
