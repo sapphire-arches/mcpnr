@@ -132,8 +132,8 @@ fn it_can_avoid_obstacles() -> Result<()> {
     // 0 | x x x
     // 1 | x 0 x
     // 2 | x 0 x
-    router.mark_cell_occupied(Position::new(1, 1), RouteId(0))?;
-    router.mark_cell_occupied(Position::new(1, 2), RouteId(0))?;
+    (*router.get_cell_mut(Position::new(1, 1))?) = GridCell::Blocked;
+    (*router.get_cell_mut(Position::new(1, 2))?) = GridCell::Blocked;
 
     // Do route with RouteId(1)
     router.route(Position::new(0, 1), Position::new(2, 2), RouteId(1))?;
@@ -208,32 +208,32 @@ fn it_chooses_the_shortest_path() -> Result<()> {
     // x 2 x
     // x e x
 
-    router.mark_cell_occupied(Position::new(1, 1), RouteId(2))?;
-    router.mark_cell_occupied(Position::new(1, 2), RouteId(2))?;
+    (*router.get_cell_mut(Position::new(1, 1))?) = GridCell::Blocked;
+    (*router.get_cell_mut(Position::new(1, 2))?) = GridCell::Occupied(RouteId(2));
     print_router_grid(&router);
 
     router.route(Position::new(0, 0), Position::new(1, 3), RouteId(1))?;
     print_router_grid(&router)?;
 
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 0))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 0))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 1))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 1))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 2))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 2))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 3))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 3))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(1, 3))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(1, 3))?,
+        &GridCell::Occupied(RouteId(1))
     );
 
     Ok(())
@@ -245,23 +245,23 @@ fn it_can_rip_up_tracks() -> Result<()> {
     router.route(Position::new(0, 0), Position::new(0, 2), RouteId(1))?;
 
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 0))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 0))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 1))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 1))?,
+        &GridCell::Occupied(RouteId(1))
     );
     assert_eq!(
-        router.is_cell_occupied(Position::new(0, 2))?,
-        Some(RouteId(1))
+        router.get_cell(Position::new(0, 2))?,
+        &GridCell::Occupied(RouteId(1))
     );
 
     router.rip_up(RouteId(1))?;
 
-    assert_eq!(router.is_cell_occupied(Position::new(0, 0))?, None);
-    assert_eq!(router.is_cell_occupied(Position::new(0, 1))?, None);
-    assert_eq!(router.is_cell_occupied(Position::new(0, 2))?, None);
+    assert_eq!(router.get_cell(Position::new(0, 0))?, &GridCell::Free);
+    assert_eq!(router.get_cell(Position::new(0, 1))?, &GridCell::Free);
+    assert_eq!(router.get_cell(Position::new(0, 2))?, &GridCell::Free);
 
     Ok(())
 }
