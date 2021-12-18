@@ -2,8 +2,12 @@
   "nodes": {
     "amulet": {
       "inputs": {
-        "flake-utils": "flake-utils",
-        "nix": "nix",
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nix": [
+          "nix"
+        ],
         "nixpkgs": [
           "nixpkgs"
         ]
@@ -24,7 +28,9 @@
     },
     "bt-yosys": {
       "inputs": {
-        "nix": "nix_2",
+        "nix": [
+          "nix"
+        ],
         "nixpkgs": [
           "nixpkgs"
         ]
@@ -59,38 +65,7 @@
         "type": "github"
       }
     },
-    "flake-utils_2": {
-      "locked": {
-        "lastModified": 1638122382,
-        "narHash": "sha256-sQzZzAbvKEqN9s0bzWuYmRaA03v40gaJ4+iL1LXjaeI=",
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "rev": "74f7e4319258e287b0f9cb95426c9853b282730b",
-        "type": "github"
-      },
-      "original": {
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "type": "github"
-      }
-    },
     "lowdown-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1633514407,
-        "narHash": "sha256-Dw32tiMjdK9t3ETl5fzGrutQTzh2rufgZV4A/BbxuD4=",
-        "owner": "kristapsdz",
-        "repo": "lowdown",
-        "rev": "d2c2b44ff6c27b936ec27358a2653caaef8f73b8",
-        "type": "github"
-      },
-      "original": {
-        "owner": "kristapsdz",
-        "repo": "lowdown",
-        "type": "github"
-      }
-    },
-    "lowdown-src_2": {
       "flake": false,
       "locked": {
         "lastModified": 1633514407,
@@ -125,90 +100,47 @@
     "nix": {
       "inputs": {
         "lowdown-src": "lowdown-src",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
-        "lastModified": 1639077373,
-        "narHash": "sha256-vmJv6o8nxLpxXfNaFxS6CjEHQcyf/cKfe1rkIXonpEw=",
-        "owner": "NixOS",
+        "lastModified": 1639738809,
+        "narHash": "sha256-RZSWOJUPkXIlMNYMC5a+WNrOjpqAHyhzyqD57BGfNY8=",
+        "owner": "nixos",
         "repo": "nix",
-        "rev": "c7b66caaca0833f0b88f3a93cbeaad73b4da1089",
+        "rev": "6e6e998930f0d7361d64644eb37d9134e74e8501",
         "type": "github"
       },
       "original": {
-        "id": "nix",
-        "type": "indirect"
-      }
-    },
-    "nix_2": {
-      "inputs": {
-        "lowdown-src": "lowdown-src_2",
-        "nixpkgs": "nixpkgs_2"
-      },
-      "locked": {
-        "lastModified": 1638447470,
-        "narHash": "sha256-DREkiGilBlNzBqonvVrIBNSsYWv1PZuvfXFhaSGeXsM=",
-        "owner": "NixOS",
+        "owner": "nixos",
         "repo": "nix",
-        "rev": "2ff71b021379a2c9bbdcb789a93cdc585b3520ca",
         "type": "github"
-      },
-      "original": {
-        "id": "nix",
-        "type": "indirect"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1632864508,
-        "narHash": "sha256-d127FIvGR41XbVRDPVvozUPQ/uRHbHwvfyKHwEt5xFM=",
-        "owner": "NixOS",
+        "lastModified": 1639865322,
+        "narHash": "sha256-b6cTxVRUTVKvZ8hXB1lplgaAJN2VEYP4zaQLg1TwJvY=",
+        "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "82891b5e2c2359d7e58d08849e4c89511ab94234",
+        "rev": "2be41f397a6010cef61e7f777212f763d0b01057",
         "type": "github"
       },
       "original": {
-        "id": "nixpkgs",
-        "ref": "nixos-21.05-small",
-        "type": "indirect"
-      }
-    },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1632864508,
-        "narHash": "sha256-d127FIvGR41XbVRDPVvozUPQ/uRHbHwvfyKHwEt5xFM=",
-        "owner": "NixOS",
+        "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "82891b5e2c2359d7e58d08849e4c89511ab94234",
         "type": "github"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "ref": "nixos-21.05-small",
-        "type": "indirect"
-      }
-    },
-    "nixpkgs_3": {
-      "locked": {
-        "lastModified": 1639110757,
-        "narHash": "sha256-2btkNe5evpLyPGDRKSKLVHlKlE1h3aiN13XlOnYE3c0=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "4189e2f124b6c5c3be2f800ff24595e340d15d1b",
-        "type": "github"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
       }
     },
     "root": {
       "inputs": {
         "amulet": "amulet",
         "bt-yosys": "bt-yosys",
-        "flake-utils": "flake-utils_2",
+        "flake-utils": "flake-utils",
         "mozilla-overlay": "mozilla-overlay",
-        "nixpkgs": "nixpkgs_3"
+        "nix": "nix",
+        "nixpkgs": "nixpkgs"
       }
     }
   },

@@ -5,12 +5,20 @@
     bt-yosys = {
       url = "github:bobtwinkles/yosys/master";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nix.follows = "nix";
     };
     amulet = {
       url = "github:bobtwinkles/amulet-flake";
+      inputs.flake-utils.follows = "flake-utils";
+      inputs.nix.follows = "nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flake-utils.url = "github:numtide/flake-utils";
+    nix = {
+      url = "github:nixos/nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nixpkgs.url = "github:nixos/nixpkgs";
     mozilla-overlay = {
       type = "github";
       owner = "mozilla";
@@ -19,7 +27,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, amulet, mozilla-overlay, bt-yosys, flake-utils }:
+  outputs = { self, nix, nixpkgs, amulet, mozilla-overlay, bt-yosys, flake-utils }:
     {
       mcpnr-rust-overlay = final: prev:
         let
