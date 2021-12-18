@@ -33,6 +33,18 @@ pub enum GridCell {
     Occupied(RouteId),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum Direction {
+    /// Z-
+    North,
+    /// Z+,
+    South,
+    /// X+
+    East,
+    /// X-
+    West,
+}
+
 pub struct Router2D {
     grid: Vec<GridCell>,
     score_grid: Vec<u32>,
@@ -67,6 +79,8 @@ impl Router2D {
             cost: u32,
             // TODO: Use routing grid indicies instead of positions
             pos: Position,
+
+            direction_entry: Direction,
         }
 
         impl PartialOrd for RouteQueueItem {
@@ -102,6 +116,8 @@ impl Router2D {
         routing_queue.push(RouteQueueItem {
             cost: 0,
             pos: start,
+            // TODO: get entry direction from pin
+            direction_entry: Direction::North,
         });
 
         while let Some(item) = routing_queue.pop() {
@@ -124,7 +140,7 @@ impl Router2D {
 
                     let mut min = self.score_grid[backtrack_pos_idx];
                     let mut min_pos = backtrack_pos;
-                    self.for_each_neighbor(backtrack_pos, |neighbor| {
+                    self.for_each_neighbor(backtrack_pos, |neighbor, _| {
                         let score = self.score_grid[self.pos_to_idx(neighbor)?];
                         debug!("Consider neighbor {:?} ({} vs {})", neighbor, score, min);
                         if score < min {
@@ -143,17 +159,29 @@ impl Router2D {
 
                 return Ok(());
             } else {
-                let cost = item.cost + 1;
-                self.for_each_neighbor(item.pos, |neighbor| {
+                self.for_each_neighbor(item.pos, |neighbor, direction| {
                     let idx = self.pos_to_idx(neighbor)?;
-                    if cost < self.score_grid[idx]
-                        && (self.grid[idx] == GridCell::Free
-                            || self.grid[idx] == GridCell::Occupied(id))
-                    {
+                    let grid = self.grid[idx];
+                    let cost = item.cost
+                        + if grid == GridCell::Free {
+                            100
+                        } else if grid == GridCell::Occupied(id) {
+                            50
+                        } else {
+                            // Skip this cell because we can't route through it, but don't error
+                            return Ok(());
+                        }
+                        - if direction == item.direction_entry {
+                            49
+                        } else {
+                            0
+                        };
+                    if cost < self.score_grid[idx] {
                         debug!("Pushing item for {} (cost: {})", neighbor, cost);
                         routing_queue.push(RouteQueueItem {
                             cost,
                             pos: neighbor,
+                            direction_entry: direction,
                         })
                     }
 
@@ -202,19 +230,19 @@ impl Router2D {
     fn for_each_neighbor(
         &self,
         pos: Position,
-        mut f: impl FnMut(Position) -> Result<()>,
+        mut f: impl FnMut(Position, Direction) -> Result<()>,
     ) -> Result<()> {
         if pos.x > 0 {
-            f(Position::new(pos.x - 1, pos.y))?;
+            f(Position::new(pos.x - 1, pos.y), Direction::West)?;
         }
         if pos.x + 1 < self.size_x {
-            f(Position::new(pos.x + 1, pos.y))?;
+            f(Position::new(pos.x + 1, pos.y), Direction::East)?;
         }
         if pos.y > 0 {
-            f(Position::new(pos.x, pos.y - 1))?;
+            f(Position::new(pos.x, pos.y - 1), Direction::North)?;
         }
         if pos.y + 1 < self.size_y {
-            f(Position::new(pos.x, pos.y + 1))?;
+            f(Position::new(pos.x, pos.y + 1), Direction::South)?;
         }
 
         Ok(())
