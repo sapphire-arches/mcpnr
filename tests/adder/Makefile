@@ -1,3 +1,4 @@
+MODULE_SIZE_X = 64
+MODULE_SIZE_Z = 64
 MODULE_NAME = adder
-MODULE_SIZE_X = 32
 include ../Makefile.common
