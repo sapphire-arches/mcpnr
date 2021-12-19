@@ -4,11 +4,12 @@ mod routing_2d;
 mod splat;
 mod structure_cache;
 
-use anyhow::{anyhow, Context, Result};
-use detail_routing::{DetailRouter, GridCell, Position, RoutingError};
-use itertools::Itertools;
-use log::warn;
-use mcpnr_common::block_storage::{Block, BlockStorage};
+use anyhow::{anyhow, ensure, Context, Result};
+use detail_routing::{
+    DetailRouter, Direction, GridCell, Position, RoutingError, ALL_DIRECTIONS, PLANAR_DIRECTIONS,
+};
+use log::{error, warn};
+use mcpnr_common::block_storage::{Block, BlockStorage, PropertyValue};
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
 use netlist::Netlist;
@@ -76,6 +77,25 @@ fn parse_args() -> Result<Config> {
     })
 }
 
+fn block_facing(block: &Block) -> Option<Direction> {
+    block
+        .properties
+        .as_ref()
+        .and_then(|p| p.get("facing"))
+        .and_then(|f| match f {
+            PropertyValue::String(f) => match f.as_str() {
+                "north" => Some(Direction::North),
+                "south" => Some(Direction::South),
+                "east" => Some(Direction::East),
+                "west" => Some(Direction::West),
+                "up" => Some(Direction::Up),
+                "down" => Some(Direction::Down),
+                _ => None,
+            },
+            PropertyValue::Byte(_) => None,
+        })
+}
+
 fn do_splat(
     config: &Config,
     design: &PlacedDesign,
@@ -100,13 +120,16 @@ fn do_splat(
 fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
     let extents = output.extents().clone();
 
-    let b_air = output.add_new_block_type(Block::new("minecraft:air".into()));
-
     let router = {
         let mut router = DetailRouter::new(extents[0], extents[1], extents[2]);
         let max_x = extents[0] as i32;
         let max_y = extents[0] as i32;
         let max_z = extents[0] as i32;
+
+        let mut mark_in_extents = |pos, v| match router.get_cell_mut(pos) {
+            Ok(vm) => *vm = v,
+            Err(_) => {}
+        };
 
         for ((x, y, z), block) in output.iter_block_coords() {
             if (y % 16) > 8 {
@@ -115,29 +138,102 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
             let x = x as i32;
             let y = y as i32;
             let z = z as i32;
-            if block != b_air {
-                *(router.get_cell_mut(Position::new(x, y, z))?) = GridCell::Blocked;
-                /*
-                if y + 1 < max_y {
-                    *(router.get_cell_mut(Position::new(x, y + 1, z))?) = GridCell::Blocked;
+            let pos = Position::new(x, y, z);
+            let block = output.info_for_index(block).ok_or_else(|| {
+                anyhow!(
+                    "Failed to look up block info for {:?} while filling in routing grid",
+                    block
+                )
+            })?;
+            match block.name.as_ref() {
+                "minecraft:redstone_wire" | "minecraft:oak_sign" => {
+                    // Redstone wire itself, as well as the signs we use as placeholders for pins
+                    mark_in_extents(pos, GridCell::Blocked);
+                    for d in PLANAR_DIRECTIONS {
+                        mark_in_extents(pos.offset(d), GridCell::Blocked);
+                    }
                 }
-                if y + 2 < max_y {
-                    // TODO: we really only need +Y when the block is a torch or a piston
-                    *(router.get_cell_mut(Position::new(x, y + 2, z))?) = GridCell::Blocked;
+                "minecraft:redstone_torch" | "minecraft:redstone_wall_torch" => {
+                    mark_in_extents(pos, GridCell::Blocked);
+                    // technically we know one of the directions is going to be marked by whatever
+                    // solid block, but it's more convenient to just unconditionally mark
+                    // everything
+                    for d in ALL_DIRECTIONS {
+                        mark_in_extents(pos.offset(d), GridCell::Blocked);
+                    }
                 }
-                if x > 1 {
-                    *(router.get_cell_mut(Position::new(x - 1, y, z))?) = GridCell::Blocked;
+                "minecraft:repeater" => {
+                    mark_in_extents(pos, GridCell::Blocked);
+                    match block_facing(block) {
+                        Some(Direction::North) | Some(Direction::South) => {
+                            mark_in_extents(pos.offset(Direction::North), GridCell::Blocked);
+                            mark_in_extents(pos.offset(Direction::South), GridCell::Blocked);
+                        }
+                        Some(Direction::East) | Some(Direction::West) => {
+                            mark_in_extents(pos.offset(Direction::North), GridCell::Blocked);
+                            mark_in_extents(pos.offset(Direction::South), GridCell::Blocked);
+                        }
+                        d => {
+                            error!("Unsupported facing direction {:?} for redstone repeater", d)
+                        }
+                    }
                 }
-                if x + 1 < max_x {
-                    *(router.get_cell_mut(Position::new(x + 1, y, z))?) = GridCell::Blocked;
+                "minecraft:lever" => {
+                    mark_in_extents(pos, GridCell::Blocked);
+                    for d in ALL_DIRECTIONS {
+                        mark_in_extents(pos.offset(d), GridCell::Blocked);
+                    }
                 }
-                if z > 0 {
-                    *(router.get_cell_mut(Position::new(x, y, z - 1))?) = GridCell::Blocked;
+                "minecraft:piston" | "minecraft:sticky_piston" => {
+                    // Pistons are giga cursed, we need to mark everything remotely closed to them
+                    // as occupied to avoid phantom powering problems
+                    mark_in_extents(pos, GridCell::Blocked);
+
+                    // We also need to find the blocks attached to the face of the piston and mark
+                    // the spaces those can push in to as occupied, potentially recursively (since
+                    // the piston may be moving a block of redstone for example)
+                    let piston_direction = block_facing(block);
+                    if let Some(piston_direction) = piston_direction {
+                        let po = pos.offset(piston_direction);
+                        let is_sticky = output
+                            .get_block(po.x as u32, po.y as u32, po.z as u32)
+                            .ok()
+                            .and_then(|b| {
+                                let b = output.info_for_index(*b)?;
+
+                                Some(b.is_sticky())
+                            })
+                            .unwrap_or(false);
+
+                        // Punt on sticky block handling for now, none of our cells use it and
+                        // handling it properly seems hard
+                        ensure!(
+                            !is_sticky,
+                            "Sticky block propegation is currently unsupported"
+                        );
+
+                        // Mark the space that this block might get pushed into as blocked
+                        mark_in_extents(po.offset(piston_direction), GridCell::Blocked);
+                    } else {
+                        error!("Piston missing facing property");
+                    }
                 }
-                if z + 1 < max_z {
-                    *(router.get_cell_mut(Position::new(x, y, z + 1))?) = GridCell::Blocked;
+                // Misc solid blocks
+                "minecraft:magenta_wool"
+                | "minecraft:orange_wool"
+                | "minecraft:black_wool"
+                | "minecraft:white_wool"
+                | "minecraft:calcite"
+                | "minecraft:redstone_lamp"
+                | "minecraft:target" => {
+                    mark_in_extents(pos, GridCell::Blocked);
                 }
-                */
+                "minecraft:air" => {
+                    // Nothing to do for air, it's free space
+                }
+                _ => {
+                    warn!("Unrecognized block type {}", block.name);
+                }
             }
         }
 

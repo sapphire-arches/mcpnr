@@ -28,6 +28,24 @@ impl Block {
             properties: None,
         }
     }
+
+    pub fn is_sticky(&self) -> bool {
+        match self.name.as_str() {
+            "minecraft:honey_block" => true,
+            "minecraft:slime_block" => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_pushable(&self) -> bool {
+        match self.name.as_str() {
+            "minecraft:air" => false,
+            "minecraft:obsidian" => false,
+            "minecraft:bedrock" => false,
+            // TODO: other unpushable blocks
+            _ => true,
+        }
+    }
 }
 
 pub struct BlockStorage {
@@ -111,6 +129,10 @@ impl BlockStorage {
 
     pub fn extents(&self) -> &[u32; 3] {
         &self.extents
+    }
+
+    pub fn info_for_index(&self, index: BlockTypeIndex) -> Option<&Block> {
+        self.palette.get(index.0 as usize)
     }
 
     #[inline]

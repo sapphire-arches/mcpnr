@@ -79,7 +79,7 @@ impl Direction {
     }
 }
 
-const PLANAR_DIRECTIONS: [Direction; 4] = [
+pub const PLANAR_DIRECTIONS: [Direction; 4] = [
     Direction::North,
     Direction::South,
     Direction::East,
@@ -87,7 +87,7 @@ const PLANAR_DIRECTIONS: [Direction; 4] = [
 ];
 
 #[allow(unused)]
-const ALL_DIRECTIONS: [Direction; 6] = [
+pub const ALL_DIRECTIONS: [Direction; 6] = [
     Direction::North,
     Direction::South,
     Direction::East,
