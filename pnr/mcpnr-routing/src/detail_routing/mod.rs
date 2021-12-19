@@ -275,7 +275,9 @@ impl DetailRouter {
                         .pos_to_idx(backtrack_pos)
                         .context("Failed to get index for backtrack start")?;
                     debug!("Mark occupied {:?}", backtrack_pos);
-                    self.mark_occupied(backtrack_pos_idx, id);
+                    self.grid
+                        .get_mut(backtrack_pos_idx)
+                        .map(|v| *v = GridCell::Occupied(id));
 
                     if backtrack_pos == last_backtrack_pos {
                         info!(
@@ -436,40 +438,6 @@ impl DetailRouter {
     #[inline]
     fn is_in_bounds(&self, pos: Position) -> bool {
         pos.in_bounding_box(&self.current_bounds_min, &self.current_bounds_max)
-    }
-
-    fn mark_occupied(&mut self, base_idx: usize, route: RouteId) {
-        fn safe_set(cell: &mut GridCell, route: GridCell) {
-            if *cell == GridCell::Free {
-                *cell = route
-            }
-        }
-
-        /*
-        self.grid
-            .get_mut(base_idx + 1)
-            .map(|v| safe_set(v, GridCell::Claimed(route)));
-        self.grid
-            .get_mut(base_idx - 1)
-            .map(|v| safe_set(v, GridCell::Claimed(route)));
-        self.grid
-            .get_mut(base_idx + self.zsi)
-            .map(|v| safe_set(v, GridCell::Claimed(route)));
-        self.grid
-            .get_mut(base_idx - self.zsi)
-            .map(|v| safe_set(v, GridCell::Claimed(route)));
-        */
-
-        self.grid
-            .get_mut(base_idx + self.ysi)
-            .map(|v| safe_set(v, GridCell::Claimed(route)));
-        self.grid
-            .get_mut(base_idx - self.ysi)
-            .map(|v| safe_set(v, GridCell::Claimed(route)));
-
-        self.grid
-            .get_mut(base_idx)
-            .map(|v| *v = GridCell::Occupied(route));
     }
 
     #[inline(always)]

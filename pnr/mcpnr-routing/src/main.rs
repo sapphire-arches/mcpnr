@@ -146,12 +146,18 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
                 )
             })?;
             match block.name.as_ref() {
-                "minecraft:redstone_wire" | "minecraft:oak_sign" => {
-                    // Redstone wire itself, as well as the signs we use as placeholders for pins
+                "minecraft:redstone_wire" => {
+                    // Redstone wire itself will happily connect to everything remotely close to it
+                    // TODO: add step up/down cut analysis
                     mark_in_extents(pos, GridCell::Blocked);
                     for d in PLANAR_DIRECTIONS {
                         mark_in_extents(pos.offset(d), GridCell::Blocked);
                     }
+                }
+                "minecraft:oak_sign" => {
+                    // Pin connection.
+                    // TODO: we should look up what pin this is and set things to the right nets
+                    // immediately
                 }
                 "minecraft:redstone_torch" | "minecraft:redstone_wall_torch" => {
                     mark_in_extents(pos, GridCell::Blocked);
@@ -351,8 +357,8 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
                 GridCell::Occupied(net) => {
                     *block = b_wools[(net.0 as usize) % b_wools.len()];
                 }
-                GridCell::Claimed(_) => {
-                    *block = b_glass;
+                GridCell::Claimed(net) => {
+                    *block = b_wools[(net.0 as usize) % b_wools.len()];
                 }
             }
         }
