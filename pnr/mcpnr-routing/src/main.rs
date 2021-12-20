@@ -122,9 +122,6 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
 
     let router = {
         let mut router = DetailRouter::new(extents[0], extents[1], extents[2]);
-        let max_x = extents[0] as i32;
-        let max_y = extents[0] as i32;
-        let max_z = extents[0] as i32;
 
         let mut mark_in_extents = |pos, v| match router.get_cell_mut(pos) {
             Ok(vm) => *vm = v,
@@ -225,17 +222,17 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
                     }
                 }
                 // Misc solid blocks
-                "minecraft:magenta_wool"
-                | "minecraft:orange_wool"
-                | "minecraft:black_wool"
-                | "minecraft:white_wool"
-                | "minecraft:calcite"
-                | "minecraft:redstone_lamp"
-                | "minecraft:target" => {
+                "minecraft:calcite" | "minecraft:redstone_lamp" | "minecraft:target" => {
+                    mark_in_extents(pos, GridCell::Blocked);
+                }
+                s if s.ends_with("_wool") => {
                     mark_in_extents(pos, GridCell::Blocked);
                 }
                 "minecraft:air" => {
                     // Nothing to do for air, it's free space
+                }
+                s if s.ends_with("_stained_glass") => {
+                    // Stained glass variants are just tier markers, allow routing through them.
                 }
                 _ => {
                     warn!("Unrecognized block type {}", block.name);
@@ -319,22 +316,22 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
         "minecraft:green_wool",
         "minecraft:red_wool",
         "minecraft:black_wool",
-        "minecraft:white_stained_glass",
-        "minecraft:orange_stained_glass",
-        "minecraft:magenta_stained_glass",
-        "minecraft:light_blue_stained_glass",
-        "minecraft:yellow_stained_glass",
-        "minecraft:lime_stained_glass",
-        "minecraft:pink_stained_glass",
-        "minecraft:gray_stained_glass",
-        "minecraft:light_gray_stained_glass",
-        "minecraft:cyan_stained_glass",
-        "minecraft:purple_stained_glass",
-        "minecraft:blue_stained_glass",
-        "minecraft:brown_stained_glass",
-        "minecraft:green_stained_glass",
-        "minecraft:red_stained_glass",
-        "minecraft:black_stained_glass",
+        "minecraft:white_terracotta",
+        "minecraft:orange_terracotta",
+        "minecraft:magenta_terracotta",
+        "minecraft:light_blue_terracotta",
+        "minecraft:yellow_terracotta",
+        "minecraft:lime_terracotta",
+        "minecraft:pink_terracotta",
+        "minecraft:gray_terracotta",
+        "minecraft:light_gray_terracotta",
+        "minecraft:cyan_terracotta",
+        "minecraft:purple_terracotta",
+        "minecraft:blue_terracotta",
+        "minecraft:brown_terracotta",
+        "minecraft:green_terracotta",
+        "minecraft:red_terracotta",
+        "minecraft:black_terracotta",
     ]
     .into_iter()
     .map(|ty| output.add_new_block_type(Block::new(ty.into())))
@@ -372,7 +369,7 @@ fn build_output(config: &Config, netlist: &Netlist) -> Result<BlockStorage> {
         (std::cmp::max(mx, pin.x), std::cmp::max(mz, pin.z))
     });
 
-    Ok(BlockStorage::new(mx + 2, config.tiers * 16, mz + 2))
+    Ok(BlockStorage::new(mx + 4, config.tiers * 16, mz + 4))
 }
 
 fn main() -> Result<()> {
