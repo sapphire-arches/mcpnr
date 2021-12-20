@@ -123,119 +123,138 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
     let router = {
         let mut router = DetailRouter::new(extents[0], extents[1], extents[2]);
 
-        let mut mark_in_extents = |pos, v| match router.get_cell_mut(pos) {
-            Ok(vm) => *vm = v,
-            Err(_) => {}
-        };
+        {
+            let mut mark_in_extents = |pos, v| match router.get_cell_mut(pos) {
+                Ok(vm) => *vm = v,
+                Err(_) => {}
+            };
 
-        for ((x, y, z), block) in output.iter_block_coords() {
-            if (y % 16) > 8 {
-                continue;
+            for ((x, y, z), block) in output.iter_block_coords() {
+                if (y % 16) > 8 {
+                    continue;
+                }
+                let x = x as i32;
+                let y = y as i32;
+                let z = z as i32;
+                let pos = Position::new(x, y, z);
+                let block = output.info_for_index(block).ok_or_else(|| {
+                    anyhow!(
+                        "Failed to look up block info for {:?} while filling in routing grid",
+                        block
+                    )
+                })?;
+                match block.name.as_ref() {
+                    "minecraft:redstone_wire" => {
+                        // Redstone wire itself will happily connect to everything remotely close to it
+                        // TODO: add step up/down cut analysis
+                        mark_in_extents(pos, GridCell::Blocked);
+                        for d in PLANAR_DIRECTIONS {
+                            mark_in_extents(pos.offset(d), GridCell::Blocked);
+                        }
+                    }
+                    "minecraft:oak_sign" => {
+                        // Pin connection.
+                        // TODO: we should look up what pin this is and set things to the right nets
+                        // immediately
+                    }
+                    "minecraft:redstone_torch" | "minecraft:redstone_wall_torch" => {
+                        mark_in_extents(pos, GridCell::Blocked);
+                        // technically we know one of the directions is going to be marked by whatever
+                        // solid block, but it's more convenient to just unconditionally mark
+                        // everything
+                        for d in ALL_DIRECTIONS {
+                            mark_in_extents(pos.offset(d), GridCell::Blocked);
+                        }
+                    }
+                    "minecraft:repeater" => {
+                        mark_in_extents(pos, GridCell::Blocked);
+                        match block_facing(block) {
+                            Some(Direction::North) | Some(Direction::South) => {
+                                mark_in_extents(pos.offset(Direction::North), GridCell::Blocked);
+                                mark_in_extents(pos.offset(Direction::South), GridCell::Blocked);
+                            }
+                            Some(Direction::East) | Some(Direction::West) => {
+                                mark_in_extents(pos.offset(Direction::North), GridCell::Blocked);
+                                mark_in_extents(pos.offset(Direction::South), GridCell::Blocked);
+                            }
+                            d => {
+                                error!("Unsupported facing direction {:?} for redstone repeater", d)
+                            }
+                        }
+                    }
+                    "minecraft:lever" => {
+                        mark_in_extents(pos, GridCell::Blocked);
+                        for d in ALL_DIRECTIONS {
+                            mark_in_extents(pos.offset(d), GridCell::Blocked);
+                        }
+                    }
+                    "minecraft:piston" | "minecraft:sticky_piston" => {
+                        // Pistons are giga cursed, we need to mark everything remotely closed to them
+                        // as occupied to avoid phantom powering problems
+                        mark_in_extents(pos, GridCell::Blocked);
+
+                        // We also need to find the blocks attached to the face of the piston and mark
+                        // the spaces those can push in to as occupied, potentially recursively (since
+                        // the piston may be moving a block of redstone for example)
+                        let piston_direction = block_facing(block);
+                        if let Some(piston_direction) = piston_direction {
+                            let po = pos.offset(piston_direction);
+                            let is_sticky = output
+                                .get_block(po.x as u32, po.y as u32, po.z as u32)
+                                .ok()
+                                .and_then(|b| {
+                                    let b = output.info_for_index(*b)?;
+
+                                    Some(b.is_sticky())
+                                })
+                                .unwrap_or(false);
+
+                            // Punt on sticky block handling for now, none of our cells use it and
+                            // handling it properly seems hard
+                            ensure!(
+                                !is_sticky,
+                                "Sticky block propegation is currently unsupported"
+                            );
+
+                            // Mark the space that this block might get pushed into as blocked
+                            mark_in_extents(po.offset(piston_direction), GridCell::Blocked);
+                        } else {
+                            error!("Piston missing facing property");
+                        }
+                    }
+                    // Misc solid blocks
+                    "minecraft:calcite" | "minecraft:redstone_lamp" | "minecraft:target" => {
+                        mark_in_extents(pos, GridCell::Blocked);
+                    }
+                    s if s.ends_with("_wool") => {
+                        mark_in_extents(pos, GridCell::Blocked);
+                    }
+                    "minecraft:air" => {
+                        // Nothing to do for air, it's free space
+                    }
+                    s if s.ends_with("_stained_glass") => {
+                        // Stained glass variants are just tier markers, allow routing through them.
+                    }
+                    _ => {
+                        warn!("Unrecognized block type {}", block.name);
+                    }
+                }
             }
-            let x = x as i32;
-            let y = y as i32;
-            let z = z as i32;
-            let pos = Position::new(x, y, z);
-            let block = output.info_for_index(block).ok_or_else(|| {
-                anyhow!(
-                    "Failed to look up block info for {:?} while filling in routing grid",
-                    block
-                )
-            })?;
-            match block.name.as_ref() {
-                "minecraft:redstone_wire" => {
-                    // Redstone wire itself will happily connect to everything remotely close to it
-                    // TODO: add step up/down cut analysis
-                    mark_in_extents(pos, GridCell::Blocked);
-                    for d in PLANAR_DIRECTIONS {
-                        mark_in_extents(pos.offset(d), GridCell::Blocked);
-                    }
-                }
-                "minecraft:oak_sign" => {
-                    // Pin connection.
-                    // TODO: we should look up what pin this is and set things to the right nets
-                    // immediately
-                }
-                "minecraft:redstone_torch" | "minecraft:redstone_wall_torch" => {
-                    mark_in_extents(pos, GridCell::Blocked);
-                    // technically we know one of the directions is going to be marked by whatever
-                    // solid block, but it's more convenient to just unconditionally mark
-                    // everything
-                    for d in ALL_DIRECTIONS {
-                        mark_in_extents(pos.offset(d), GridCell::Blocked);
-                    }
-                }
-                "minecraft:repeater" => {
-                    mark_in_extents(pos, GridCell::Blocked);
-                    match block_facing(block) {
-                        Some(Direction::North) | Some(Direction::South) => {
-                            mark_in_extents(pos.offset(Direction::North), GridCell::Blocked);
-                            mark_in_extents(pos.offset(Direction::South), GridCell::Blocked);
-                        }
-                        Some(Direction::East) | Some(Direction::West) => {
-                            mark_in_extents(pos.offset(Direction::North), GridCell::Blocked);
-                            mark_in_extents(pos.offset(Direction::South), GridCell::Blocked);
-                        }
-                        d => {
-                            error!("Unsupported facing direction {:?} for redstone repeater", d)
-                        }
-                    }
-                }
-                "minecraft:lever" => {
-                    mark_in_extents(pos, GridCell::Blocked);
-                    for d in ALL_DIRECTIONS {
-                        mark_in_extents(pos.offset(d), GridCell::Blocked);
-                    }
-                }
-                "minecraft:piston" | "minecraft:sticky_piston" => {
-                    // Pistons are giga cursed, we need to mark everything remotely closed to them
-                    // as occupied to avoid phantom powering problems
-                    mark_in_extents(pos, GridCell::Blocked);
 
-                    // We also need to find the blocks attached to the face of the piston and mark
-                    // the spaces those can push in to as occupied, potentially recursively (since
-                    // the piston may be moving a block of redstone for example)
-                    let piston_direction = block_facing(block);
-                    if let Some(piston_direction) = piston_direction {
-                        let po = pos.offset(piston_direction);
-                        let is_sticky = output
-                            .get_block(po.x as u32, po.y as u32, po.z as u32)
-                            .ok()
-                            .and_then(|b| {
-                                let b = output.info_for_index(*b)?;
+            for (net_idx, net) in netlist.iter_nets() {
+                let net_idx: u32 = (*net_idx)
+                    .try_into()
+                    .with_context(|| anyhow!("Convert net_idx {}", net_idx))?;
+                let occupied = GridCell::Occupied(RouteId(net_idx));
 
-                                Some(b.is_sticky())
-                            })
-                            .unwrap_or(false);
+                for pin in net.iter_sinks(netlist) {
+                    let pos = Position::new(pin.x as i32, pin.y as i32, pin.z as i32);
+                    let _ = router.get_cell_mut(pos).map(|c| *c = occupied);
+                }
 
-                        // Punt on sticky block handling for now, none of our cells use it and
-                        // handling it properly seems hard
-                        ensure!(
-                            !is_sticky,
-                            "Sticky block propegation is currently unsupported"
-                        );
-
-                        // Mark the space that this block might get pushed into as blocked
-                        mark_in_extents(po.offset(piston_direction), GridCell::Blocked);
-                    } else {
-                        error!("Piston missing facing property");
-                    }
-                }
-                // Misc solid blocks
-                "minecraft:calcite" | "minecraft:redstone_lamp" | "minecraft:target" => {
-                    mark_in_extents(pos, GridCell::Blocked);
-                }
-                s if s.ends_with("_wool") => {
-                    mark_in_extents(pos, GridCell::Blocked);
-                }
-                "minecraft:air" => {
-                    // Nothing to do for air, it's free space
-                }
-                s if s.ends_with("_stained_glass") => {
-                    // Stained glass variants are just tier markers, allow routing through them.
-                }
-                _ => {
-                    warn!("Unrecognized block type {}", block.name);
+                for pin in net.iter_drivers(netlist) {
+                    let pos = Position::new(pin.x as i32, pin.y as i32, pin.z as i32);
+                    let _ = router.get_cell_mut(pos).map(|c| *c = occupied);
                 }
             }
         }

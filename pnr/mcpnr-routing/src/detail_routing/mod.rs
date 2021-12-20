@@ -365,6 +365,39 @@ impl DetailRouter {
                     .context("Failed to get index of final step in backtrack")?;
                 self.grid[backtrack_pos_idx] = GridCell::Occupied(id);
 
+                // Postprocessing: mark everything around the stuff we just occupied as claimed.
+                let claimed = GridCell::Claimed(id);
+                for y in 0..self.size_y {
+                    for z in 0..self.size_z {
+                        for x in 0..self.size_x {
+                            let pos = Position::new(x, y, z);
+                            if &GridCell::Occupied(id)
+                                != self.get_cell(pos).with_context(|| {
+                                    anyhow!("Testing if cell is occupied post-backtrack")
+                                })?
+                            {
+                                continue;
+                            }
+
+                            for d in ALL_DIRECTIONS {
+                                let pos = pos.offset(d);
+
+                                match self.get_cell_mut(pos) {
+                                    Ok(v) => match v {
+                                        v @ GridCell::Free => *v = claimed,
+                                        GridCell::Blocked => {}
+                                        GridCell::Occupied(_) => {}
+                                        GridCell::Claimed(_) => {}
+                                    },
+                                    Err(_) => {
+                                        // Walked off the side of the world, no problems
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 return Ok(());
             } else {
                 self.for_each_neighbor(item.pos, |neighbor, direction, is_step| {
