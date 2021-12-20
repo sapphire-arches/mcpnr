@@ -16,22 +16,16 @@ pub struct Splatter<'a> {
 
 impl<'a> Splatter<'a> {
     pub fn new(o: &mut BlockStorage, structure_cache: &'a StructureCache) -> Self {
-        let common_blocks = [
+        let mut common_blocks: HashMap<_, _> = [
+            ("air", Block::new("minecraft:air".to_owned())),
+            ("calcite", Block::new("minecraft:calcite".to_owned())),
             (
-                "air".to_owned(),
-                o.add_new_block_type(Block::new("minecraft:air".to_owned())),
+                "redstone_lamp",
+                Block::new("minecraft:redstone_lamp".to_owned()),
             ),
             (
-                "calcite".to_owned(),
-                o.add_new_block_type(Block::new("minecraft:calcite".to_owned())),
-            ),
-            (
-                "redstone_lamp".to_owned(),
-                o.add_new_block_type(Block::new("minecraft:redstone_lamp".to_owned())),
-            ),
-            (
-                "switch".to_owned(),
-                o.add_new_block_type(Block {
+                "switch",
+                Block {
                     name: "minecraft:lever".to_owned(),
                     properties: Some(
                         [
@@ -44,26 +38,51 @@ impl<'a> Splatter<'a> {
                         .into_iter()
                         .collect(),
                     ),
-                }),
-            ),
-            (
-                "wool".to_owned(),
-                o.add_new_block_type(Block {
-                    name: "minecraft:black_wool".to_owned(),
-                    properties: None,
-                    // properties: Some(
-                    //     [(
-                    //         "color".to_owned(),
-                    //         PropertyValue::String("black".to_owned()),
-                    //     )]
-                    //     .into_iter()
-                    //     .collect(),
-                    // ),
-                }),
+                },
             ),
         ]
         .into_iter()
+        .map(|(k, v)| (k.to_owned(), o.add_new_block_type(v)))
         .collect();
+
+        const COLORS: [&str; 16] = [
+            "white",
+            "orange",
+            "magenta",
+            "light_blue",
+            "yellow",
+            "lime",
+            "pink",
+            "gray",
+            "light_gray",
+            "cyan",
+            "purple",
+            "blue",
+            "brown",
+            "green",
+            "red",
+            "black",
+        ];
+        for color in COLORS {
+            // wool version
+            let mut name = "wool_".to_owned();
+            name.push_str(color);
+
+            let mut mc_name = "minecraft:".to_owned();
+            mc_name.push_str(color);
+            mc_name.push_str("_wool");
+
+            common_blocks.insert(name, o.add_new_block_type(Block::new(mc_name)));
+            // glass version
+            let mut name = "glass_".to_owned();
+            name.push_str(color);
+
+            let mut mc_name = "minecraft:".to_owned();
+            mc_name.push_str(color);
+            mc_name.push_str("_stained_glass");
+
+            common_blocks.insert(name, o.add_new_block_type(Block::new(mc_name)));
+        }
 
         Self {
             structure_cache,
@@ -73,21 +92,75 @@ impl<'a> Splatter<'a> {
 
     pub fn draw_border(&self, o: &mut BlockStorage) -> Result<()> {
         let extents = o.extents().clone();
-        let wool = self.get_common_block("wool").context("Look up wool")?;
-        for y in 9..extents[1] {
+        let wool_black = self
+            .get_common_block("wool_black")
+            .context("Look up black wool")?;
+        {
+            let y = extents[1] - 1;
             for x in 0..extents[0] {
                 if ((x / 2) + (y / 2)) % 2 == 1 {
                     continue;
                 }
-                *(o.get_block_mut(x, y, 0)?) = wool;
-                *(o.get_block_mut(x, y, extents[2] - 1)?) = wool;
+                *(o.get_block_mut(x, y, 0)?) = wool_black;
+                *(o.get_block_mut(x, y, extents[2] - 1)?) = wool_black;
             }
             for z in 0..extents[2] {
                 if ((z / 2) + (y / 2)) % 2 == 1 {
                     continue;
                 }
-                *(o.get_block_mut(0, y, z)?) = wool;
-                *(o.get_block_mut(extents[0] - 1, y, z)?) = wool;
+                *(o.get_block_mut(0, y, z)?) = wool_black;
+                *(o.get_block_mut(extents[0] - 1, y, z)?) = wool_black;
+            }
+        }
+
+        let tier_colors: [(BlockTypeIndex, BlockTypeIndex); 5] = [
+            // local interconnect / logic layer
+            (
+                self.get_common_block("glass_white")?,
+                self.get_common_block("glass_black")?,
+            ),
+            // Metal 1
+            (
+                self.get_common_block("glass_light_gray")?,
+                self.get_common_block("glass_gray")?,
+            ),
+            // Metal 2
+            (
+                self.get_common_block("glass_blue")?,
+                self.get_common_block("glass_light_blue")?,
+            ),
+            // Metal 3
+            (
+                self.get_common_block("glass_magenta")?,
+                self.get_common_block("glass_pink")?,
+            ),
+            // Metal 4
+            (
+                self.get_common_block("glass_red")?,
+                self.get_common_block("glass_orange")?,
+            ),
+        ];
+        for y in 0..extents[1] {
+            let (dark, light) = match y % 16 {
+                0 => tier_colors[0],
+                4 => tier_colors[1],
+                7 => tier_colors[2],
+                10 => tier_colors[3],
+                13 => tier_colors[4],
+                _ => continue,
+            };
+            for x in 0..extents[0] {
+                let xx = x / 2;
+                for z in 0..extents[2] {
+                    let zz = z / 2;
+                    let block = match (xx + zz) % 2 {
+                        0 => dark,
+                        1 => light,
+                        _ => unreachable!(),
+                    };
+
+                    *(o.get_block_mut(x, y, z)?) = block;
+                }
             }
         }
 
