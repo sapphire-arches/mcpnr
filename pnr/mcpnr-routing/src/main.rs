@@ -5,10 +5,12 @@ mod splat;
 mod structure_cache;
 
 use anyhow::{anyhow, ensure, Context, Result};
+use detail_routing::wire_segment::{splat_wire_segment, WirePosition, WireTierLayer};
 use detail_routing::{
-    DetailRouter, Direction, GridCell, Position, RoutingError, ALL_DIRECTIONS, PLANAR_DIRECTIONS,
+    DetailRouter, Direction, GridCell, Layer, Position, RoutingError, ALL_DIRECTIONS,
+    PLANAR_DIRECTIONS,
 };
-use log::{error, warn};
+use log::{error, info, warn};
 use mcpnr_common::block_storage::{Block, BlockStorage, PropertyValue};
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
@@ -108,10 +110,24 @@ fn do_splat(
         .draw_border(output_structure)
         .context("Error during border draw")?;
 
-    for cell in design.cells.iter() {
-        splatter
-            .splat_cell(cell, output_structure)
-            .context("Error during cell splat")?;
+    // for cell in design.cells.iter() {
+    //     splatter
+    //         .splat_cell(cell, output_structure)
+    //         .context("Error during cell splat")?;
+    // }
+
+    // temp test code: splat all possible wire directions
+    for (x, di) in PLANAR_DIRECTIONS.iter().enumerate() {
+        for (z, od) in PLANAR_DIRECTIONS.iter().enumerate() {
+            let wp = WirePosition::new(x as i32, z as i32);
+            let r = splat_wire_segment(
+                output_structure,
+                wp,
+                (WireTierLayer::new(0, Layer::LI), *di),
+                (WireTierLayer::new(0, Layer::LI), *od),
+            );
+            info!("({}, {}): {:?} -> {:?}, {:?}", x, z, di, od, r);
+        }
     }
 
     Ok(())
@@ -384,11 +400,13 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
 }
 
 fn build_output(config: &Config, netlist: &Netlist) -> Result<BlockStorage> {
-    let (mx, mz) = netlist.iter_pins().fold((0, 0), |(mx, mz), pin| {
-        (std::cmp::max(mx, pin.x), std::cmp::max(mz, pin.z))
-    });
+    // let (mx, mz) = netlist.iter_pins().fold((0, 0), |(mx, mz), pin| {
+    //     (std::cmp::max(mx, pin.x), std::cmp::max(mz, pin.z))
+    // });
 
-    Ok(BlockStorage::new(mx + 4, config.tiers * 16, mz + 4))
+    // Ok(BlockStorage::new(mx + 4, config.tiers * 16, mz + 4))
+    //
+    Ok(BlockStorage::new(16, 16, 16))
 }
 
 fn main() -> Result<()> {
@@ -413,7 +431,7 @@ fn main() -> Result<()> {
         &mut output_structure,
     )?;
 
-    do_route(&netlist, &mut output_structure)?;
+    // do_route(&netlist, &mut output_structure)?;
 
     {
         let outf = std::fs::File::create(config.output_file).unwrap();

@@ -1,10 +1,12 @@
 use crate::RouteId;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use log::{debug, info};
 use std::{collections::BinaryHeap, fmt::Display};
 
 #[cfg(test)]
 mod tests;
+
+pub mod wire_segment;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Position {
@@ -49,6 +51,58 @@ pub enum GridCell {
     /// clear of other net routes to avoid DRC errors
     Claimed(RouteId),
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Layer {
+    // [0, 4)
+    LI,
+    // [4, 7)
+    M0,
+    // [7, 10)
+    M1,
+    // [10, 13)
+    M2,
+    // [13, 16)
+    M3,
+}
+
+impl Layer {
+    #[inline]
+    pub fn next(self) -> Layer {
+        match self {
+            Layer::LI => Layer::M0,
+            Layer::M0 => Layer::M1,
+            Layer::M1 => Layer::M2,
+            Layer::M2 => Layer::M3,
+            Layer::M3 => Layer::LI,
+        }
+    }
+
+    pub fn from_y_idx(y: i32) -> Result<Layer> {
+        ensure!(
+            0 <= y && y < 16,
+            "Y {} out of range, did you forget to mod by 16?",
+            y
+        );
+        if y < 4 {
+            Ok(Layer::LI)
+        } else {
+            Ok(ALL_LAYERS[((y - 4) / 3) as usize])
+        }
+    }
+
+    pub fn to_y_idx(self) -> u32 {
+        match self {
+            Layer::LI => 0,
+            Layer::M0 => 4,
+            Layer::M1 => 7,
+            Layer::M2 => 10,
+            Layer::M3 => 13,
+        }
+    }
+}
+
+pub const ALL_LAYERS: [Layer; 5] = [Layer::LI, Layer::M0, Layer::M1, Layer::M2, Layer::M3];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
