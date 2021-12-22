@@ -100,6 +100,8 @@ fn block_facing(block: &Block) -> Option<Direction> {
         })
 }
 
+const GEN_TEST_SQUARES: bool = false;
+
 fn do_splat(
     config: &Config,
     design: &PlacedDesign,
@@ -112,52 +114,62 @@ fn do_splat(
         .draw_border(output_structure)
         .context("Error during border draw")?;
 
-    // for cell in design.cells.iter() {
-    //     splatter
-    //         .splat_cell(cell, output_structure)
-    //         .context("Error during cell splat")?;
-    // }
-    let b_torch =
-        output_structure.add_new_block_type(Block::new("minecraft:redstone_torch".into()));
-
-    // Square of wires
-    // Each side has 5 steps LI -> M0, M0 -> M1, M1 -> M1, M1 -> M0, M0 -> LI and corners (so 7
-    // total wire cells)
-    let wires = [
-        (WireTierLayer::new(0, Layer::LI), Direction::South),
-        (WireTierLayer::new(0, Layer::M0), Direction::South),
-        (WireTierLayer::new(0, Layer::M1), Direction::South),
-        (WireTierLayer::new(0, Layer::M1), Direction::South),
-        (WireTierLayer::new(0, Layer::M0), Direction::South),
-        (WireTierLayer::new(0, Layer::LI), Direction::South),
-        (WireTierLayer::new(0, Layer::LI), Direction::East),
-        (WireTierLayer::new(0, Layer::M0), Direction::East),
-        (WireTierLayer::new(0, Layer::M1), Direction::East),
-        (WireTierLayer::new(0, Layer::M1), Direction::East),
-        (WireTierLayer::new(0, Layer::M0), Direction::East),
-        (WireTierLayer::new(0, Layer::LI), Direction::East),
-        (WireTierLayer::new(0, Layer::LI), Direction::North),
-        (WireTierLayer::new(0, Layer::M0), Direction::North),
-        (WireTierLayer::new(0, Layer::M1), Direction::North),
-        (WireTierLayer::new(0, Layer::M1), Direction::North),
-        (WireTierLayer::new(0, Layer::M0), Direction::North),
-        (WireTierLayer::new(0, Layer::LI), Direction::North),
-        (WireTierLayer::new(0, Layer::LI), Direction::West),
-        (WireTierLayer::new(0, Layer::M0), Direction::West),
-        (WireTierLayer::new(0, Layer::M1), Direction::West),
-        (WireTierLayer::new(0, Layer::M1), Direction::West),
-        (WireTierLayer::new(0, Layer::M0), Direction::West),
-        (WireTierLayer::new(0, Layer::LI), Direction::West),
-    ];
-    let mut p = WirePosition::new(0, 0);
-    for i in 0..wires.len() {
-        let s = wires[(i + wires.len() - 1) % wires.len()];
-        let e = wires[i];
-        info!("{:?} -> {:?} at {:?}", s, e, p);
-        let (pn, _) = splat_wire_segment(output_structure, p, s, e)?;
-        p = pn;
+    for cell in design.cells.iter() {
+        splatter
+            .splat_cell(cell, output_structure)
+            .context("Error during cell splat")?;
     }
 
+    if GEN_TEST_SQUARES {
+        let b_torch =
+            output_structure.add_new_block_type(Block::new("minecraft:redstone_torch".into()));
+
+        // Square of wires
+        // Each side has 5 steps LI -> M0, M0 -> M1, M1 -> M1, M1 -> M0, M0 -> LI and corners (so 7
+        // total wire cells)
+        let wires = [
+            (WireTierLayer::new(0, Layer::LI), Direction::South),
+            (WireTierLayer::new(0, Layer::M0), Direction::South),
+            (WireTierLayer::new(0, Layer::M1), Direction::South),
+            (WireTierLayer::new(0, Layer::M1), Direction::South),
+            (WireTierLayer::new(0, Layer::M0), Direction::South),
+            (WireTierLayer::new(0, Layer::LI), Direction::South),
+            (WireTierLayer::new(0, Layer::LI), Direction::East),
+            (WireTierLayer::new(0, Layer::M0), Direction::East),
+            (WireTierLayer::new(0, Layer::M1), Direction::East),
+            (WireTierLayer::new(0, Layer::M1), Direction::East),
+            (WireTierLayer::new(0, Layer::M0), Direction::East),
+            (WireTierLayer::new(0, Layer::LI), Direction::East),
+            (WireTierLayer::new(0, Layer::LI), Direction::North),
+            (WireTierLayer::new(0, Layer::M0), Direction::North),
+            (WireTierLayer::new(0, Layer::M1), Direction::North),
+            (WireTierLayer::new(0, Layer::M1), Direction::North),
+            (WireTierLayer::new(0, Layer::M0), Direction::North),
+            (WireTierLayer::new(0, Layer::LI), Direction::North),
+            (WireTierLayer::new(0, Layer::LI), Direction::West),
+            (WireTierLayer::new(0, Layer::M0), Direction::West),
+            (WireTierLayer::new(0, Layer::M1), Direction::West),
+            (WireTierLayer::new(0, Layer::M1), Direction::West),
+            (WireTierLayer::new(0, Layer::M0), Direction::West),
+            (WireTierLayer::new(0, Layer::LI), Direction::West),
+        ];
+        let mut p = WirePosition::new(11, 0);
+        for i in 0..wires.len() {
+            let s = wires[(i + wires.len() - 1) % wires.len()];
+            let e = wires[i];
+            info!("{:?} -> {:?} at {:?}", s, e, p);
+            let (pn, _) = splat_wire_segment(output_structure, p, s, e)?;
+            p = pn;
+        }
+        let mut p = WirePosition::new(9, 10);
+        for i in (0..wires.len()).rev() {
+            let e = wires[(i + wires.len() - 1) % wires.len()];
+            let s = wires[i];
+            info!("{:?} -> {:?} at {:?}", s, e, p);
+            let (pn, _) = splat_wire_segment(output_structure, p, s, e)?;
+            p = pn;
+        }
+    }
     Ok(())
 }
 
@@ -428,14 +440,16 @@ fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
 }
 
 fn build_output(config: &Config, netlist: &Netlist) -> Result<BlockStorage> {
-    // let (mx, mz) = netlist.iter_pins().fold((0, 0), |(mx, mz), pin| {
-    //     (std::cmp::max(mx, pin.x), std::cmp::max(mz, pin.z))
-    // });
+    if GEN_TEST_SQUARES {
+        let size = 2 * 7 * 4;
+        Ok(BlockStorage::new(size, 16, size))
+    } else {
+        let (mx, mz) = netlist.iter_pins().fold((0, 0), |(mx, mz), pin| {
+            (std::cmp::max(mx, pin.x), std::cmp::max(mz, pin.z))
+        });
 
-    // Ok(BlockStorage::new(mx + 4, config.tiers * 16, mz + 4))
-    //
-    let size = 2 * 7 * 4;
-    Ok(BlockStorage::new(size, 16, size))
+        Ok(BlockStorage::new(mx + 4, config.tiers * 16, mz + 4))
+    }
 }
 
 fn main() -> Result<()> {

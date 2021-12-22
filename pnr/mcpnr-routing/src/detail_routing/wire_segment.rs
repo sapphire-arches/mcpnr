@@ -102,11 +102,11 @@ pub fn splat_wire_segment(
 
         match (input.1, output.1) {
             (Direction::North, Direction::West)
-            | (Direction::West, Direction::North)
             | (Direction::North, Direction::North)
+            | (Direction::East, Direction::South)
             | (Direction::South, Direction::South) => {
                 // North-South wire
-                // North-West wire
+                // North-East wire
                 // _ x
                 // _ x
                 (*o.get_block_mut(ix0 + 0, iy + 0, iz0 + 1)?) = b_calcite;
@@ -115,7 +115,7 @@ pub fn splat_wire_segment(
             (Direction::East, Direction::East)
             | (Direction::West, Direction::West)
             | (Direction::South, Direction::East)
-            | (Direction::East, Direction::South) => {
+            | (Direction::West, Direction::North) => {
                 // East-West wire
                 // South-East wire
                 // _ _
@@ -123,14 +123,14 @@ pub fn splat_wire_segment(
                 (*o.get_block_mut(ix0 + 1, iy + 0, iz0 + 0)?) = b_calcite;
                 (*o.get_block_mut(ix0 + 1, iy + 1, iz0 + 0)?) = b_redstone;
             }
-            (Direction::North, Direction::East) | (Direction::East, Direction::North) => {
-                // North-East wire
+            (Direction::South, Direction::West) | (Direction::East, Direction::North) => {
+                // North-West wire
                 // _ _
                 // _ x
 
                 // Already set above, nothing to do but not error
             }
-            (Direction::South, Direction::West) | (Direction::West, Direction::South) => {
+            (Direction::North, Direction::East) | (Direction::West, Direction::South) => {
                 // South-West wire
                 // _ x
                 // x x
