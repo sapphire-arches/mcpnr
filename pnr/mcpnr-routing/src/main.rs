@@ -169,6 +169,54 @@ fn do_splat(
             let (pn, _) = splat_wire_segment(output_structure, p, s, e)?;
             p = pn;
         }
+    } else {
+        let mut splat_wires = |mut p, wires: &[(WireTierLayer, Direction)]| -> Result<()> {
+            for i in 1..wires.len() {
+                let s = wires[(i + wires.len() - 1) % wires.len()];
+                let e = wires[i];
+                info!("{:?} -> {:?} at {:?}", s, e, p);
+                let (pn, _) = splat_wire_segment(output_structure, p, s, e)?;
+                p = pn;
+            }
+
+            Ok(())
+        };
+
+        splat_wires(
+            WirePosition::new(1, 1),
+            &[
+                (WireTierLayer::new(0, Layer::LI), Direction::South),
+                (WireTierLayer::new(0, Layer::LI), Direction::South),
+                (WireTierLayer::new(0, Layer::LI), Direction::South),
+                (WireTierLayer::new(0, Layer::LI), Direction::South),
+                (WireTierLayer::new(0, Layer::LI), Direction::East),
+            ],
+        )?;
+        splat_wires(
+            WirePosition::new(0, 1),
+            &[
+                (WireTierLayer::new(0, Layer::LI), Direction::South),
+                (WireTierLayer::new(0, Layer::LI), Direction::South),
+                (WireTierLayer::new(0, Layer::M0), Direction::East),
+                (WireTierLayer::new(0, Layer::M0), Direction::North),
+                (WireTierLayer::new(0, Layer::M0), Direction::North),
+                (WireTierLayer::new(0, Layer::M0), Direction::East),
+                (WireTierLayer::new(0, Layer::M0), Direction::South),
+                (WireTierLayer::new(0, Layer::LI), Direction::South),
+            ],
+        )?;
+        splat_wires(
+            WirePosition::new(2, 5),
+            &[
+                (WireTierLayer::new(0, Layer::LI), Direction::South),
+                (WireTierLayer::new(0, Layer::LI), Direction::East),
+                (WireTierLayer::new(0, Layer::LI), Direction::North),
+                (WireTierLayer::new(0, Layer::LI), Direction::North),
+                (WireTierLayer::new(0, Layer::LI), Direction::North),
+                (WireTierLayer::new(0, Layer::LI), Direction::North),
+                (WireTierLayer::new(0, Layer::LI), Direction::North),
+            ],
+        )?;
     }
     Ok(())
 }
