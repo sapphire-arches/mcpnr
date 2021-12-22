@@ -19,6 +19,8 @@ use splat::Splatter;
 use std::path::PathBuf;
 use structure_cache::StructureCache;
 
+use crate::detail_routing::wire_segment::WIRE_GRID_SCALE;
+
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RouteId(pub u32);
@@ -115,19 +117,45 @@ fn do_splat(
     //         .splat_cell(cell, output_structure)
     //         .context("Error during cell splat")?;
     // }
+    let b_torch =
+        output_structure.add_new_block_type(Block::new("minecraft:redstone_torch".into()));
 
-    // temp test code: splat all possible wire directions
-    for (x, di) in PLANAR_DIRECTIONS.iter().enumerate() {
-        for (z, od) in PLANAR_DIRECTIONS.iter().enumerate() {
-            let wp = WirePosition::new(x as i32, z as i32);
-            let r = splat_wire_segment(
-                output_structure,
-                wp,
-                (WireTierLayer::new(0, Layer::LI), *di),
-                (WireTierLayer::new(0, Layer::LI), *od),
-            );
-            info!("({}, {}): {:?} -> {:?}, {:?}", x, z, di, od, r);
-        }
+    // Square of wires
+    // Each side has 5 steps LI -> M0, M0 -> M1, M1 -> M1, M1 -> M0, M0 -> LI and corners (so 7
+    // total wire cells)
+    let wires = [
+        (WireTierLayer::new(0, Layer::LI), Direction::South),
+        (WireTierLayer::new(0, Layer::M0), Direction::South),
+        (WireTierLayer::new(0, Layer::M1), Direction::South),
+        (WireTierLayer::new(0, Layer::M1), Direction::South),
+        (WireTierLayer::new(0, Layer::M0), Direction::South),
+        (WireTierLayer::new(0, Layer::LI), Direction::South),
+        (WireTierLayer::new(0, Layer::LI), Direction::East),
+        (WireTierLayer::new(0, Layer::M0), Direction::East),
+        (WireTierLayer::new(0, Layer::M1), Direction::East),
+        (WireTierLayer::new(0, Layer::M1), Direction::East),
+        (WireTierLayer::new(0, Layer::M0), Direction::East),
+        (WireTierLayer::new(0, Layer::LI), Direction::East),
+        (WireTierLayer::new(0, Layer::LI), Direction::North),
+        (WireTierLayer::new(0, Layer::M0), Direction::North),
+        (WireTierLayer::new(0, Layer::M1), Direction::North),
+        (WireTierLayer::new(0, Layer::M1), Direction::North),
+        (WireTierLayer::new(0, Layer::M0), Direction::North),
+        (WireTierLayer::new(0, Layer::LI), Direction::North),
+        (WireTierLayer::new(0, Layer::LI), Direction::West),
+        (WireTierLayer::new(0, Layer::M0), Direction::West),
+        (WireTierLayer::new(0, Layer::M1), Direction::West),
+        (WireTierLayer::new(0, Layer::M1), Direction::West),
+        (WireTierLayer::new(0, Layer::M0), Direction::West),
+        (WireTierLayer::new(0, Layer::LI), Direction::West),
+    ];
+    let mut p = WirePosition::new(0, 0);
+    for i in 0..wires.len() {
+        let s = wires[(i + wires.len() - 1) % wires.len()];
+        let e = wires[i];
+        info!("{:?} -> {:?} at {:?}", s, e, p);
+        let (pn, _) = splat_wire_segment(output_structure, p, s, e)?;
+        p = pn;
     }
 
     Ok(())
@@ -406,7 +434,8 @@ fn build_output(config: &Config, netlist: &Netlist) -> Result<BlockStorage> {
 
     // Ok(BlockStorage::new(mx + 4, config.tiers * 16, mz + 4))
     //
-    Ok(BlockStorage::new(16, 16, 16))
+    let size = 2 * 7 * 4;
+    Ok(BlockStorage::new(size, 16, size))
 }
 
 fn main() -> Result<()> {

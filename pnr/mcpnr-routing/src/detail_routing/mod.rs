@@ -131,6 +131,17 @@ impl Direction {
             Direction::Down => Position::new(p.x, p.y - 1, p.z),
         }
     }
+
+    pub fn mirror(self) -> Self {
+        match self {
+            Direction::North => Direction::South,
+            Direction::South => Direction::North,
+            Direction::East => Direction::West,
+            Direction::West => Direction::East,
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+        }
+    }
 }
 
 pub const PLANAR_DIRECTIONS: [Direction; 4] = [

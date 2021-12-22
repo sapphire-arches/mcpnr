@@ -101,12 +101,12 @@ pub fn splat_wire_segment(
         (*o.get_block_mut(ix0 + 0, iy + 1, iz0 + 0)?) = b_redstone;
 
         match (input.1, output.1) {
-            (Direction::South, Direction::West)
-            | (Direction::West, Direction::South)
+            (Direction::North, Direction::West)
+            | (Direction::West, Direction::North)
             | (Direction::North, Direction::North)
             | (Direction::South, Direction::South) => {
                 // North-South wire
-                // South-West wire
+                // North-West wire
                 // _ x
                 // _ x
                 (*o.get_block_mut(ix0 + 0, iy + 0, iz0 + 1)?) = b_calcite;
@@ -114,24 +114,24 @@ pub fn splat_wire_segment(
             }
             (Direction::East, Direction::East)
             | (Direction::West, Direction::West)
-            | (Direction::North, Direction::East)
-            | (Direction::East, Direction::North) => {
+            | (Direction::South, Direction::East)
+            | (Direction::East, Direction::South) => {
                 // East-West wire
-                // North-East wire
+                // South-East wire
                 // _ _
                 // x x
                 (*o.get_block_mut(ix0 + 1, iy + 0, iz0 + 0)?) = b_calcite;
                 (*o.get_block_mut(ix0 + 1, iy + 1, iz0 + 0)?) = b_redstone;
             }
-            (Direction::North, Direction::West) | (Direction::West, Direction::North) => {
-                // North-West wire
+            (Direction::North, Direction::East) | (Direction::East, Direction::North) => {
+                // North-East wire
                 // _ _
                 // _ x
 
                 // Already set above, nothing to do but not error
             }
-            (Direction::South, Direction::East) | (Direction::East, Direction::South) => {
-                // South-East wire
+            (Direction::South, Direction::West) | (Direction::West, Direction::South) => {
+                // South-West wire
                 // _ x
                 // x x
                 (*o.get_block_mut(ix0 + 0, iy + 0, iz0 + 1)?) = b_calcite;
@@ -145,14 +145,19 @@ pub fn splat_wire_segment(
                 bail!("Unsupported direction combination {:?} -> {:?}", i, o);
             }
         }
-        Ok((start_position.offset(input.1)?, input.0))
+        Ok((start_position.offset(output.1)?, input.0))
     } else {
         // We don't care about directionality, the wire legalizer should fix that for us.
         // Therefore we ensure the input is always lower in the stackup than the output
-        let (input, output) = if input.0 < output.0 {
-            (input, output)
+        let end_position = start_position.offset(input.1)?.offset(output.1)?;
+        let (start_position, input, output) = if input.0 < output.0 {
+            (start_position, input, output)
         } else {
-            (output, input)
+            (
+                start_position.offset(input.1)?,
+                (output.0, input.1.mirror()),
+                (input.0, output.1.mirror()),
+            )
         };
 
         let mut set_with_delta = |p: Position, x: i32, y: i32, z: i32| -> Result<()> {
@@ -167,7 +172,6 @@ pub fn splat_wire_segment(
             Ok(())
         };
 
-        let end_position = start_position.offset(input.1)?.offset(output.1)?;
         let start_position = Position::new(
             start_position.x * WIRE_GRID_SCALE,
             (input.0.tier * 16 + input.0.layer.to_y_idx()) as i32,
@@ -259,15 +263,28 @@ pub fn splat_wire_segment(
                     (start_position.offset(Direction::East), 4)
                 }
                 (Direction::West, Direction::West) => (start_position.offset(Direction::East), 4),
-                _ => bail!("Unsupported start direction {:?}", input.1),
+                (i, o) => bail!(
+                    "Unsupported inter-metal-layer via in direction {:?} -> {:?}",
+                    i,
+                    o
+                ),
             };
 
             // Generate the standard 4-block ramp
             let mut next_position = start_position;
             for _ in 0..max_steps {
-                let x: u32 = next_position.x.try_into().context("LI->M0 ramp start X")?;
-                let y: u32 = next_position.y.try_into().context("LI->M0 ramp start Y")?;
-                let z: u32 = next_position.z.try_into().context("LI->M0 ramp start Z")?;
+                let x: u32 = next_position
+                    .x
+                    .try_into()
+                    .context("inter-metal ramp start X")?;
+                let y: u32 = next_position
+                    .y
+                    .try_into()
+                    .context("inter-metal ramp start Y")?;
+                let z: u32 = next_position
+                    .z
+                    .try_into()
+                    .context("inter-metal ramp start Z")?;
 
                 (*o.get_block_mut(x, y + 0, z)?) = b_calcite;
                 (*o.get_block_mut(x, y + 1, z)?) = b_redstone;
