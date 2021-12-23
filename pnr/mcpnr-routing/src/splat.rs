@@ -54,6 +54,17 @@ impl<'a> Splatter<'a> {
                     ),
                 },
             ),
+            (
+                "sign_z-",
+                Block {
+                    name: "minecraft:oak_sign".to_owned(),
+                    properties: Some(
+                        [("rotation".to_owned(), PropertyValue::Byte(0))]
+                            .into_iter()
+                            .collect(),
+                    ),
+                },
+            ),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_owned(), o.add_new_block_type(v)))
@@ -214,6 +225,7 @@ impl<'a> Splatter<'a> {
         let b_calcite = self.get_common_block("calcite")?;
         let b_light = self.get_common_block("redstone_lamp")?;
         let z_repeater = self.get_common_block("repeater_z-")?;
+        let z_sign = self.get_common_block("sign_z-")?;
 
         for light in 0..nlights {
             let light_x = (light * 2) as u32 + base_x;
@@ -228,6 +240,7 @@ impl<'a> Splatter<'a> {
             *(o.get_block_mut(light_x + 1, base_y + 0, base_z + 1)?) = b_air;
             *(o.get_block_mut(light_x + 1, base_y + 1, base_z + 1)?) = b_air;
 
+            *(o.get_block_mut(light_x + 0, base_y + 1, base_z + 2)?) = z_sign;
             *(o.get_block_mut(light_x + 0, base_y + 0, base_z + 2)?) = b_calcite;
         }
 
@@ -246,6 +259,7 @@ impl<'a> Splatter<'a> {
         let b_air = self.get_common_block("air")?;
         let b_calcite = self.get_common_block("calcite")?;
         let b_switch = self.get_common_block("switch")?;
+        let z_sign = self.get_common_block("sign_z-")?;
 
         for switch in 0..nswitches {
             let switch_x = (switch * 2) as u32 + base_x;
@@ -260,6 +274,7 @@ impl<'a> Splatter<'a> {
             *(o.get_block_mut(switch_x + 1, base_y + 0, base_z + 1)?) = b_calcite;
             *(o.get_block_mut(switch_x + 1, base_y + 1, base_z + 1)?) = b_calcite;
 
+            *(o.get_block_mut(switch_x + 0, base_y + 1, base_z + 2)?) = z_sign;
             *(o.get_block_mut(switch_x + 0, base_y + 0, base_z + 2)?) = b_calcite;
         }
 

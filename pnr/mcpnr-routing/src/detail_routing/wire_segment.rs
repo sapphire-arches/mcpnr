@@ -10,7 +10,7 @@ use super::{Direction, Layer};
 pub const WIRE_GRID_SCALE: i32 = 2;
 
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct WireCoord(pub i32);
 
 impl WireCoord {

@@ -1,7 +1,8 @@
 use crate::RouteId;
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
+use itertools::Itertools;
 use log::{debug, info};
-use mcpnr_common::block_storage::{Direction, Position, ALL_DIRECTIONS, PLANAR_DIRECTIONS};
+use mcpnr_common::block_storage::{Direction, Position, PLANAR_DIRECTIONS};
 use std::{collections::BinaryHeap, fmt::Display};
 
 use self::wire_segment::WireCoord;
@@ -17,14 +18,14 @@ pub enum GridCell {
     Free,
     /// Blocked by something (e.g. part of the guts of a cell
     Blocked,
-    /// Occupied by a net with the given RouteId
-    Occupied(RouteId),
+    /// Occupied by a net with the given RouteId, leaving this cell in the given Direction
+    Occupied(Direction, RouteId),
     /// Claimed by a net with the given RouteId (not directly on the route, but required to remain
     /// clear of other net routes to avoid DRC errors
     Claimed(RouteId),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct GridCellPosition {
     x: WireCoord,
     /// This is tier * LAYERS_PER_TIER + layer.to_compact_idx
@@ -254,7 +255,37 @@ impl DetailRouter {
             }
         }
 
-        log::info!("Begin routing from {} to {}", start, end);
+        log::info!("Begin routing net {:?} from {} to {}", id, start, end);
+
+        let start_direction = if let GridCell::Occupied(d, gid) = self.get_cell(start)? {
+            ensure!(
+                *gid == id,
+                "Pin start is occupied by a net with non-matching {:?} (should be {:?})",
+                gid,
+                id
+            );
+            *d
+        } else {
+            bail!(
+                "Pin start is not occupied, it is instead {:?}",
+                self.get_cell(start)?
+            );
+        };
+
+        let end_direction = if let GridCell::Occupied(d, gid) = self.get_cell(end)? {
+            ensure!(
+                *gid == id,
+                "Pin end is occupied by a net with non-matching {:?} (should be {:?})",
+                gid,
+                id
+            );
+            *d
+        } else {
+            bail!(
+                "Pin end is not occupied, it is instead {:?}",
+                self.get_cell(end)?
+            );
+        };
 
         // TODO: use some sort of inline marker to avoid needing to clear the full grid on every
         // pass
@@ -270,7 +301,7 @@ impl DetailRouter {
             cost: 0,
             pos: start,
             // TODO: get entry direction from pin
-            direction_entry: Direction::North,
+            direction_entry: start_direction,
         });
 
         self.current_bounds_min = GridCellPosition::new(
@@ -300,8 +331,8 @@ impl DetailRouter {
                 debug!("Begin backtrack");
                 let mut backtrack_pos = item.pos;
                 let mut min_pos = backtrack_pos;
-                let mut min_direction = Direction::North;
-                let mut min_is_step = StepDirection::NoStep;
+                let mut min_direction = end_direction;
+                let mut min_step = StepDirection::NoStep;
                 let mut last_backtrack_pos = GridCellPosition::new(WireCoord(0), 0, WireCoord(0));
 
                 while backtrack_pos != start {
@@ -311,7 +342,15 @@ impl DetailRouter {
                     debug!("Mark occupied {:?}", backtrack_pos);
                     self.grid
                         .get_mut(backtrack_pos_idx)
-                        .map(|v| *v = GridCell::Occupied(id));
+                        .map(|v| *v = GridCell::Occupied(min_direction, id));
+                    if min_step != StepDirection::NoStep {
+                        let backtrack_pos_idx = self
+                            .pos_to_idx(backtrack_pos.offset(min_direction))
+                            .context("Backtrack of step took us out of bounds")?;
+                        self.grid
+                            .get_mut(backtrack_pos_idx)
+                            .map(|v| *v = GridCell::Claimed(id));
+                    }
 
                     if backtrack_pos == last_backtrack_pos {
                         info!(
@@ -324,33 +363,34 @@ impl DetailRouter {
                     }
 
                     let mut min = self.score_grid[backtrack_pos_idx];
-                    self.for_each_neighbor(backtrack_pos, |neighbor, direction, is_step| {
-                        debug!("  Consider neighbor {}", neighbor);
-                        if !self.is_in_bounds(neighbor) {
-                            debug!(
-                                "  Discard neighbor {} because it is out of bounds",
-                                neighbor
-                            );
-                            return Ok(());
-                        }
-                        if self.is_blocked(neighbor, id) {
-                            debug!("  Discard neighbor {} because it is blocked", neighbor);
-                            return Ok(());
-                        }
-                        let idx = self
-                            .pos_to_idx(neighbor)
-                            .context("  Failed to get neighbor index during backtrack")?;
-                        let score = self.score_grid[idx];
-                        debug!("  Consider neighbor {:?} ({} vs {})", neighbor, score, min);
-                        if score < min {
-                            min = score;
-                            min_pos = neighbor;
-                            min_direction = direction;
-                            min_is_step = is_step;
-                        }
+                    self.for_each_neighbor(
+                        backtrack_pos,
+                        min_direction,
+                        id,
+                        |neighbor, direction, step| {
+                            debug!("  Consider neighbor {}", neighbor);
+                            if !self.is_in_bounds(neighbor) {
+                                debug!(
+                                    "  Discard neighbor {} because it is out of bounds",
+                                    neighbor
+                                );
+                                return Ok(());
+                            }
+                            let idx = self
+                                .pos_to_idx(neighbor)
+                                .context("  Failed to get neighbor index during backtrack")?;
+                            let score = self.score_grid[idx];
+                            debug!("  Consider neighbor {:?} ({} vs {})", neighbor, score, min);
+                            if score < min {
+                                min = score;
+                                min_pos = neighbor;
+                                min_direction = direction;
+                                min_step = step;
+                            }
 
-                        Ok(())
-                    })
+                            Ok(())
+                        },
+                    )
                     .context("During backtrack neighbor search")?;
 
                     last_backtrack_pos = backtrack_pos;
@@ -360,60 +400,66 @@ impl DetailRouter {
                 let backtrack_pos_idx = self
                     .pos_to_idx(backtrack_pos)
                     .context("Failed to get index of final step in backtrack")?;
-                self.grid[backtrack_pos_idx] = GridCell::Occupied(id);
+                self.grid[backtrack_pos_idx] = GridCell::Occupied(min_direction, id);
 
                 return Ok(());
             } else {
-                self.for_each_neighbor(item.pos, |neighbor, direction, is_step| {
-                    // Skip neighbors that leave the bounds of what we care about
-                    if !self.is_in_bounds(neighbor) {
-                        debug!("Skipping {} because it leaves bounding box", neighbor);
-                        return Ok(());
-                    }
-                    // Skip neighbors with invalid connectivity
-                    if self.is_blocked(neighbor, id) {
-                        // Skip this cell because we can't route through it, but don't error
-                        debug!(
-                            "Skipping {} because it's blocked from {}",
-                            neighbor, item.pos
-                        );
-                        return Ok(());
-                    }
-                    let idx = self
-                        .pos_to_idx(neighbor)
-                        .context("Failed to get index of new neighbor")?;
-                    let grid = self.grid[idx];
-                    let cost = item.cost
-                        + if grid == GridCell::Free {
-                            100
-                        } else if grid == GridCell::Occupied(id) {
-                            50
-                        } else {
-                            // Skip this cell because we can't route through it, but don't error
-                            debug!("Skipping {} because it's blocked by {:?}", neighbor, grid);
+                self.for_each_neighbor(
+                    item.pos,
+                    item.direction_entry,
+                    id,
+                    |neighbor, direction, is_step| {
+                        // Skip neighbors that leave the bounds of what we care about
+                        if !self.is_in_bounds(neighbor) {
+                            debug!("Skipping {} because it leaves bounding box", neighbor);
                             return Ok(());
                         }
-                        - if direction == item.direction_entry {
-                            49
-                        } else {
-                            0
+                        let idx = self
+                            .pos_to_idx(neighbor)
+                            .context("Failed to get index of new neighbor")?;
+                        let grid = self.grid[idx];
+                        let cost = item.cost
+                            + match grid {
+                                GridCell::Free => 100,
+                                GridCell::Blocked => 10_000_000,
+                                GridCell::Occupied(_, nid) => {
+                                    if id == nid {
+                                        50
+                                    } else {
+                                        // Skip this cell because we can't route through it, but don't error
+                                        debug!(
+                                            "Skipping {} because it's blocked by {:?}",
+                                            neighbor, grid
+                                        );
+                                        return Ok(());
+                                    }
+                                }
+                                GridCell::Claimed(_) => {
+                                    // Skip this cell because we can't route through it, but don't error
+                                    debug!(
+                                        "Skipping {} because it's blocked by {:?}",
+                                        neighbor, grid
+                                    );
+                                    return Ok(());
+                                }
+                            }
+                            + match is_step {
+                                StepDirection::StepUp => 1000,
+                                StepDirection::StepDown => 1000,
+                                StepDirection::NoStep => 0,
+                            };
+                        if cost < self.score_grid[idx] {
+                            debug!("Pushing item for {} (cost: {})", neighbor, cost);
+                            routing_queue.push(RouteQueueItem {
+                                cost,
+                                pos: neighbor,
+                                direction_entry: direction,
+                            })
                         }
-                        + match is_step {
-                            StepDirection::StepUp => 1000,
-                            StepDirection::StepDown => 1000,
-                            StepDirection::NoStep => 0,
-                        };
-                    if cost < self.score_grid[idx] {
-                        debug!("Pushing item for {} (cost: {})", neighbor, cost);
-                        routing_queue.push(RouteQueueItem {
-                            cost,
-                            pos: neighbor,
-                            direction_entry: direction,
-                        })
-                    }
 
-                    Ok(())
-                })
+                        Ok(())
+                    },
+                )
                 .context("Forward search neighbors")?
             }
         }
@@ -461,12 +507,12 @@ impl DetailRouter {
         }
     }
 
-    fn is_blocked(&self, pos: GridCellPosition, id: RouteId) -> bool {
+    fn is_blocked(&self, pos: GridCellPosition, id: RouteId, entry_direction: Direction) -> bool {
         match self.get_cell(pos) {
             Ok(cell) => match cell {
                 GridCell::Free => false,
                 GridCell::Blocked => true,
-                GridCell::Occupied(s) => s != &id,
+                GridCell::Occupied(d, s) => *d == entry_direction || s != &id,
                 GridCell::Claimed(s) => s != &id,
             },
             Err(_) => true,
@@ -476,22 +522,62 @@ impl DetailRouter {
     fn for_each_neighbor(
         &self,
         pos: GridCellPosition,
+        entry_direction: Direction,
+        id: RouteId,
         mut f: impl FnMut(GridCellPosition, Direction, StepDirection) -> Result<()>,
     ) -> Result<()> {
         for d in PLANAR_DIRECTIONS {
-            f(pos.offset(d), d, StepDirection::NoStep).context("in-plane direction")?;
-            f(
-                pos.offset(d).offset(Direction::Up).offset(d),
-                d,
-                StepDirection::StepUp,
-            )
-            .context("step up direction")?;
-            f(
-                pos.offset(d).offset(Direction::Down).offset(d),
-                d,
-                StepDirection::StepDown,
-            )
-            .context("step down direction")?;
+            let neighbor = pos.offset(d);
+            if d == entry_direction.mirror() {
+                // Can't double back
+                debug!(
+                    "Skipping neighbors like {} because it would require a direction mirror",
+                    neighbor
+                );
+                continue;
+            }
+            if self.is_blocked(neighbor, id, entry_direction) {
+                // No possible move in this direction
+                debug!(
+                    "Skipping neighbors like {} because they are blocked",
+                    neighbor
+                );
+                continue;
+            }
+            f(neighbor, d, StepDirection::NoStep).context("in-plane direction")?;
+
+            // Need to ensure the landing of the ramp is free
+            // and (conservatively) the space under the ramp is free
+            // wires under the ramp should be OK but we don't allow that for now
+            let neighbor_up = neighbor.offset(Direction::Up);
+            if !self.is_blocked(neighbor_up, id, entry_direction) {
+                f(neighbor_up, d, StepDirection::StepUp).context("step up direction")?;
+            }
+
+            // Similar to above, but we check the space below us and the landing cell
+            let neighbor_down = neighbor.offset(Direction::Down);
+            if !self.is_blocked(pos.offset(Direction::Down), id, entry_direction)
+                && !self.is_blocked(neighbor_down, id, entry_direction)
+            {
+                f(neighbor_down, d, StepDirection::StepDown).context("step down direction")?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn rip_up(&mut self, id: RouteId, pins: &[GridCellPosition]) -> Result<()> {
+        // TODO: make this API more efficient?
+        let cells: Vec<_> = pins.iter().map(|p| self.pos_to_idx(*p)).try_collect()?;
+        for (i, cell) in self.grid.iter_mut().enumerate() {
+            if cells.contains(&i) {
+                continue;
+            }
+            match cell {
+                GridCell::Occupied(_, i) if *i == id => *cell = GridCell::Free,
+                GridCell::Claimed(i) if *i == id => *cell = GridCell::Free,
+                _ => {}
+            }
         }
 
         Ok(())
@@ -526,7 +612,17 @@ impl DetailRouter {
                     match self.grid[idx] {
                         GridCell::Free => buf_c.push_str("FFF "),
                         GridCell::Blocked => buf_c.push_str("BBB "),
-                        GridCell::Occupied(RouteId(i)) => buf_c.push_str(&format!("O{:2} ", i)),
+                        GridCell::Occupied(d, RouteId(i)) => {
+                            let dc = match d {
+                                Direction::North => "N",
+                                Direction::South => "S",
+                                Direction::East => "E",
+                                Direction::West => "W",
+                                Direction::Up => "U",
+                                Direction::Down => "D",
+                            };
+                            buf_c.push_str(&format!("{}{:2} ", dc, i))
+                        }
                         GridCell::Claimed(RouteId(i)) => buf_c.push_str(&format!("C{:2} ", i)),
                     }
                 }
