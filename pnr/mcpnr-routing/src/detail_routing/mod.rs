@@ -1,43 +1,13 @@
 use crate::RouteId;
 use anyhow::{anyhow, ensure, Context, Result};
 use log::{debug, info};
+use mcpnr_common::block_storage::{Direction, Position, ALL_DIRECTIONS, PLANAR_DIRECTIONS};
 use std::{collections::BinaryHeap, fmt::Display};
 
 #[cfg(test)]
 mod tests;
 
 pub mod wire_segment;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Position {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
-}
-
-impl Display for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}, {}, {})", self.x, self.y, self.z)
-    }
-}
-
-impl Position {
-    pub fn new(x: i32, y: i32, z: i32) -> Self {
-        Self { x, y, z }
-    }
-
-    pub fn in_bounding_box(&self, min: &Self, max: &Self) -> bool {
-        let x = min.x <= self.x && self.x < max.x;
-        let y = min.y <= self.y && self.y < max.y;
-        let z = min.z <= self.z && self.z < max.z;
-
-        x && y && z
-    }
-
-    pub fn offset(&self, d: Direction) -> Self {
-        d.offset_position_by(self)
-    }
-}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum GridCell {
@@ -104,62 +74,7 @@ impl Layer {
 
 pub const ALL_LAYERS: [Layer; 5] = [Layer::LI, Layer::M0, Layer::M1, Layer::M2, Layer::M3];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Direction {
-    /// Z-
-    North,
-    /// Z+,
-    South,
-    /// X+
-    East,
-    /// X-
-    West,
-    /// +Y
-    Up,
-    /// -Y
-    Down,
-}
-
-impl Direction {
-    fn offset_position_by(self, p: &Position) -> Position {
-        match self {
-            Direction::North => Position::new(p.x, p.y, p.z - 1),
-            Direction::South => Position::new(p.x, p.y, p.z + 1),
-            Direction::East => Position::new(p.x + 1, p.y, p.z),
-            Direction::West => Position::new(p.x - 1, p.y, p.z),
-            Direction::Up => Position::new(p.x, p.y + 1, p.z),
-            Direction::Down => Position::new(p.x, p.y - 1, p.z),
-        }
-    }
-
-    pub fn mirror(self) -> Self {
-        match self {
-            Direction::North => Direction::South,
-            Direction::South => Direction::North,
-            Direction::East => Direction::West,
-            Direction::West => Direction::East,
-            Direction::Up => Direction::Down,
-            Direction::Down => Direction::Up,
-        }
-    }
-}
-
-pub const PLANAR_DIRECTIONS: [Direction; 4] = [
-    Direction::North,
-    Direction::South,
-    Direction::East,
-    Direction::West,
-];
-
-#[allow(unused)]
-pub const ALL_DIRECTIONS: [Direction; 6] = [
-    Direction::North,
-    Direction::South,
-    Direction::East,
-    Direction::West,
-    Direction::Up,
-    Direction::Down,
-];
+pub const LAYERS_PER_TIER: u32 = ALL_LAYERS.len() as u32;
 
 #[derive(Debug, PartialEq, Eq)]
 enum StepDirection {

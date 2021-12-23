@@ -5,13 +5,12 @@ mod splat;
 mod structure_cache;
 
 use anyhow::{anyhow, ensure, Context, Result};
-use detail_routing::wire_segment::{splat_wire_segment, WirePosition, WireTierLayer};
-use detail_routing::{
-    DetailRouter, Direction, GridCell, Layer, Position, RoutingError, ALL_DIRECTIONS,
-    PLANAR_DIRECTIONS,
-};
+use detail_routing::wire_segment::{splat_wire_segment, LayerPosition, WireTierLayer};
+use detail_routing::{DetailRouter, GridCell, Layer, RoutingError};
 use log::{error, info, warn};
-use mcpnr_common::block_storage::{Block, BlockStorage, PropertyValue};
+use mcpnr_common::block_storage::{
+    Block, BlockStorage, Direction, Position, PropertyValue, PLANAR_DIRECTIONS, ALL_DIRECTIONS,
+};
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
 use netlist::Netlist;
@@ -153,7 +152,7 @@ fn do_splat(
             (WireTierLayer::new(0, Layer::M0), Direction::West),
             (WireTierLayer::new(0, Layer::LI), Direction::West),
         ];
-        let mut p = WirePosition::new(11, 0);
+        let mut p = LayerPosition::new(11.into(), 0.into());
         for i in 0..wires.len() {
             let s = wires[(i + wires.len() - 1) % wires.len()];
             let e = wires[i];
@@ -161,7 +160,7 @@ fn do_splat(
             let (pn, _) = splat_wire_segment(output_structure, p, s, e)?;
             p = pn;
         }
-        let mut p = WirePosition::new(9, 10);
+        let mut p = LayerPosition::new(9.into(), 10.into());
         for i in (0..wires.len()).rev() {
             let e = wires[(i + wires.len() - 1) % wires.len()];
             let s = wires[i];
@@ -183,7 +182,7 @@ fn do_splat(
         };
 
         splat_wires(
-            WirePosition::new(1, 1),
+            LayerPosition::new(1.into(), 1.into()),
             &[
                 (WireTierLayer::new(0, Layer::LI), Direction::South),
                 (WireTierLayer::new(0, Layer::LI), Direction::South),
@@ -193,7 +192,7 @@ fn do_splat(
             ],
         )?;
         splat_wires(
-            WirePosition::new(0, 1),
+            LayerPosition::new(0.into(), 1.into()),
             &[
                 (WireTierLayer::new(0, Layer::LI), Direction::South),
                 (WireTierLayer::new(0, Layer::LI), Direction::South),
@@ -206,7 +205,7 @@ fn do_splat(
             ],
         )?;
         splat_wires(
-            WirePosition::new(2, 5),
+            LayerPosition::new(2.into(), 5.into()),
             &[
                 (WireTierLayer::new(0, Layer::LI), Direction::South),
                 (WireTierLayer::new(0, Layer::LI), Direction::East),
@@ -221,11 +220,19 @@ fn do_splat(
     Ok(())
 }
 
-fn do_route(netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
+fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
     let extents = output.extents().clone();
 
+    if GEN_TEST_SQUARES {
+        return Ok(());
+    }
+
     let router = {
-        let mut router = DetailRouter::new(extents[0], extents[1], extents[2]);
+        let mut router = DetailRouter::new(
+            extents[0] / WIRE_GRID_SCALE as u32,
+            config.tiers,
+            extents[2] / WIRE_GRID_SCALE as u32,
+        );
 
         {
             let mut mark_in_extents = |pos, v| match router.get_cell_mut(pos) {
@@ -522,7 +529,7 @@ fn main() -> Result<()> {
         &mut output_structure,
     )?;
 
-    // do_route(&netlist, &mut output_structure)?;
+    do_route(&config, &netlist, &mut output_structure)?;
 
     {
         let outf = std::fs::File::create(config.output_file).unwrap();

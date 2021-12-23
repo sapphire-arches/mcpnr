@@ -6,6 +6,7 @@ mod serialization;
 
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::vec::Vec;
 
 // Should go down
@@ -48,6 +49,90 @@ impl Block {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Position {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
+impl Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
+    }
+}
+
+impl Position {
+    pub fn new(x: i32, y: i32, z: i32) -> Self {
+        Self { x, y, z }
+    }
+
+    pub fn in_bounding_box(&self, min: &Self, max: &Self) -> bool {
+        let x = min.x <= self.x && self.x < max.x;
+        let y = min.y <= self.y && self.y < max.y;
+        let z = min.z <= self.z && self.z < max.z;
+
+        x && y && z
+    }
+
+    pub fn offset(&self, d: Direction) -> Self {
+        match d {
+            Direction::North => Position::new(self.x, self.y, self.z - 1),
+            Direction::South => Position::new(self.x, self.y, self.z + 1),
+            Direction::East => Position::new(self.x + 1, self.y, self.z),
+            Direction::West => Position::new(self.x - 1, self.y, self.z),
+            Direction::Up => Position::new(self.x, self.y + 1, self.z),
+            Direction::Down => Position::new(self.x, self.y - 1, self.z),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Direction {
+    /// Z-
+    North,
+    /// Z+,
+    South,
+    /// X+
+    East,
+    /// X-
+    West,
+    /// +Y
+    Up,
+    /// -Y
+    Down,
+}
+
+impl Direction {
+    #[inline]
+    pub fn mirror(self) -> Self {
+        match self {
+            Direction::North => Direction::South,
+            Direction::South => Direction::North,
+            Direction::East => Direction::West,
+            Direction::West => Direction::East,
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+        }
+    }
+}
+
+pub const PLANAR_DIRECTIONS: [Direction; 4] = [
+    Direction::North,
+    Direction::South,
+    Direction::East,
+    Direction::West,
+];
+
+#[allow(unused)]
+pub const ALL_DIRECTIONS: [Direction; 6] = [
+    Direction::North,
+    Direction::South,
+    Direction::East,
+    Direction::West,
+    Direction::Up,
+    Direction::Down,
+];
 pub struct BlockStorage {
     /// 3D extents. If changing this is required then it must be done through
     /// Self::resize because all the other fields rely on it staying

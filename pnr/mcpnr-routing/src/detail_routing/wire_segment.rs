@@ -1,3 +1,5 @@
+use std::ops::{Add, Sub};
+
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use log::debug;
 use mcpnr_common::block_storage::{Block, BlockStorage};
@@ -8,24 +10,60 @@ use super::{Direction, Layer};
 
 pub const WIRE_GRID_SCALE: i32 = 2;
 
-/// Wire position. This is the "real" coordinate divided by the WIRE_GRID_SCALE.
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct WirePosition {
-    pub x: i32,
-    pub y: i32,
+pub struct WireCoord(i32);
+
+impl WireCoord {
+    pub fn from_block_coord(v: i32) -> Self {
+        Self(v / WIRE_GRID_SCALE)
+    }
+
+    pub fn to_block_coord(self) -> i32 {
+        self.0 * WIRE_GRID_SCALE
+    }
 }
 
-impl WirePosition {
-    pub fn new(x: i32, y: i32) -> Self {
+impl Add<i32> for WireCoord {
+    type Output = Self;
+
+    fn add(self, rhs: i32) -> Self::Output {
+        Self(self.0 + rhs)
+    }
+}
+
+impl Sub<i32> for WireCoord {
+    type Output = Self;
+
+    fn sub(self, rhs: i32) -> Self::Output {
+        Self(self.0 - rhs)
+    }
+}
+
+impl From<i32> for WireCoord {
+    fn from(i: i32) -> Self {
+        Self(i)
+    }
+}
+
+/// Wire position. This is the "real" coordinate divided by the WIRE_GRID_SCALE.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LayerPosition {
+    pub x: WireCoord,
+    pub y: WireCoord,
+}
+
+impl LayerPosition {
+    pub fn new(x: WireCoord, y: WireCoord) -> Self {
         Self { x, y }
     }
 
-    pub fn offset(self, d: Direction) -> Result<WirePosition> {
+    pub fn offset(self, d: Direction) -> Result<LayerPosition> {
         match d {
-            Direction::North => Ok(WirePosition::new(self.x, self.y - 1)),
-            Direction::South => Ok(WirePosition::new(self.x, self.y + 1)),
-            Direction::East => Ok(WirePosition::new(self.x + 1, self.y)),
-            Direction::West => Ok(WirePosition::new(self.x - 1, self.y)),
+            Direction::North => Ok(LayerPosition::new(self.x, self.y - 1)),
+            Direction::South => Ok(LayerPosition::new(self.x, self.y + 1)),
+            Direction::East => Ok(LayerPosition::new(self.x + 1, self.y)),
+            Direction::West => Ok(LayerPosition::new(self.x - 1, self.y)),
             _ => Err(anyhow!("Can not offset position in direction {:?}", d)),
         }
     }
@@ -65,10 +103,10 @@ impl WireTierLayer {
 /// Returns the position to which signal was routed.
 pub fn splat_wire_segment(
     o: &mut BlockStorage,
-    start_position: WirePosition,
+    start_position: LayerPosition,
     input: (WireTierLayer, Direction),
     output: (WireTierLayer, Direction),
-) -> Result<(WirePosition, WireTierLayer)> {
+) -> Result<(LayerPosition, WireTierLayer)> {
     ensure!(
         input.0.adjacent(output.0),
         "Layers are not adjacent: {:?} -> {:?}",
@@ -89,10 +127,10 @@ pub fn splat_wire_segment(
     let b_redstone = o.add_new_block_type(Block::new("minecraft:redstone_wire".into()));
 
     if input.0 == output.0 {
-        let ix0: u32 = (start_position.x * WIRE_GRID_SCALE)
+        let ix0: u32 = (start_position.x.to_block_coord())
             .try_into()
             .context("Start X")?;
-        let iz0: u32 = (start_position.y * WIRE_GRID_SCALE)
+        let iz0: u32 = (start_position.y.to_block_coord())
             .try_into()
             .context("Start Z")?;
         let iy = input.0.tier * 16 + input.0.layer.to_y_idx();
@@ -173,9 +211,9 @@ pub fn splat_wire_segment(
         };
 
         let start_position = Position::new(
-            start_position.x * WIRE_GRID_SCALE,
+            start_position.x.to_block_coord(),
             (input.0.tier * 16 + input.0.layer.to_y_idx()) as i32,
-            start_position.y * WIRE_GRID_SCALE,
+            start_position.y.to_block_coord(),
         );
         if output.0.layer == Layer::M0 {
             // Layers are not the same and the higher layer is M0, lower layer must be LI
