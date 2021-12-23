@@ -4,6 +4,8 @@ use log::{debug, info};
 use mcpnr_common::block_storage::{Direction, Position, ALL_DIRECTIONS, PLANAR_DIRECTIONS};
 use std::{collections::BinaryHeap, fmt::Display};
 
+use self::wire_segment::WireCoord;
+
 #[cfg(test)]
 mod tests;
 
@@ -20,6 +22,77 @@ pub enum GridCell {
     /// Claimed by a net with the given RouteId (not directly on the route, but required to remain
     /// clear of other net routes to avoid DRC errors
     Claimed(RouteId),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GridCellPosition {
+    x: WireCoord,
+    /// This is tier * LAYERS_PER_TIER + layer.to_compact_idx
+    y: i32,
+    z: WireCoord,
+}
+
+impl GridCellPosition {
+    pub fn new(x: WireCoord, y: i32, z: WireCoord) -> Self {
+        Self { x, y, z }
+    }
+
+    pub fn in_bounding_box(&self, min: &Self, max: &Self) -> bool {
+        let x = min.x <= self.x && self.x < max.x;
+        let y = min.y <= self.y && self.y < max.y;
+        let z = min.z <= self.z && self.z < max.z;
+
+        x && y && z
+    }
+
+    pub fn offset(self, d: Direction) -> Self {
+        match d {
+            Direction::North => GridCellPosition::new(self.x, self.y, self.z - 1),
+            Direction::South => GridCellPosition::new(self.x, self.y, self.z + 1),
+            Direction::East => GridCellPosition::new(self.x + 1, self.y, self.z),
+            Direction::West => GridCellPosition::new(self.x - 1, self.y, self.z),
+            Direction::Up => GridCellPosition::new(self.x, self.y + 1, self.z),
+            Direction::Down => GridCellPosition::new(self.x, self.y - 1, self.z),
+        }
+    }
+}
+
+impl TryFrom<Position> for GridCellPosition {
+    type Error = anyhow::Error;
+
+    fn try_from(p: Position) -> Result<Self> {
+        let tier = p.y / 16;
+        let layer = Layer::from_y_idx(p.y % 16)?;
+
+        Ok(GridCellPosition {
+            x: WireCoord::from_block_coord(p.x),
+            y: (tier * LAYERS_PER_TIER as i32) + layer.to_compact_idx(),
+            z: WireCoord::from_block_coord(p.z),
+        })
+    }
+}
+
+impl Display for GridCellPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let tier = self.y / LAYERS_PER_TIER as i32;
+        let layer = Layer::from_compact_idx(self.y % LAYERS_PER_TIER as i32);
+
+        match layer {
+            Ok(layer) => write!(
+                f,
+                "({}, {}) in {:?} of tier {}",
+                self.x.0, self.z.0, layer, tier
+            ),
+            Err(_) => write!(
+                f,
+                "({}, {}) in (UNSUPPPORTED LAYER IDX {}) of tier {}",
+                self.x.0,
+                self.z.0,
+                self.y % LAYERS_PER_TIER as i32,
+                tier
+            ),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -57,7 +130,7 @@ impl Layer {
         if y < 4 {
             Ok(Layer::LI)
         } else {
-            Ok(ALL_LAYERS[((y - 4) / 3) as usize])
+            Ok(ALL_LAYERS[1 + ((y - 4) / 3) as usize])
         }
     }
 
@@ -68,6 +141,27 @@ impl Layer {
             Layer::M1 => 7,
             Layer::M2 => 10,
             Layer::M3 => 13,
+        }
+    }
+
+    pub fn to_compact_idx(self) -> i32 {
+        match self {
+            Layer::LI => 0,
+            Layer::M0 => 1,
+            Layer::M1 => 2,
+            Layer::M2 => 3,
+            Layer::M3 => 4,
+        }
+    }
+
+    pub fn from_compact_idx(compact: i32) -> Result<Self> {
+        match compact {
+            0 => Ok(Layer::LI),
+            1 => Ok(Layer::M0),
+            2 => Ok(Layer::M1),
+            3 => Ok(Layer::M2),
+            4 => Ok(Layer::M3),
+            _ => Err(anyhow!("Unsupported compact idx in conversion {}", compact)),
         }
     }
 }
@@ -94,8 +188,8 @@ pub struct DetailRouter {
     grid: Vec<GridCell>,
     score_grid: Vec<u32>,
 
-    current_bounds_min: Position,
-    current_bounds_max: Position,
+    current_bounds_min: GridCellPosition,
+    current_bounds_max: GridCellPosition,
 }
 
 impl DetailRouter {
@@ -121,18 +215,23 @@ impl DetailRouter {
             grid,
             score_grid,
 
-            current_bounds_min: Position::new(0, 0, 0),
-            current_bounds_max: Position::new(0, 0, 0),
+            current_bounds_min: GridCellPosition::new(WireCoord(0), 0, WireCoord(0)),
+            current_bounds_max: GridCellPosition::new(WireCoord(0), 0, WireCoord(0)),
         }
     }
 
-    pub fn route(&mut self, start: Position, end: Position, id: RouteId) -> Result<()> {
+    pub fn route(
+        &mut self,
+        start: GridCellPosition,
+        end: GridCellPosition,
+        id: RouteId,
+    ) -> Result<()> {
         // TODO: implement A* by adding an estimate to this
         #[derive(PartialEq, Eq)]
         struct RouteQueueItem {
             cost: u32,
             // TODO: Use routing grid indicies instead of positions
-            pos: Position,
+            pos: GridCellPosition,
 
             direction_entry: Direction,
         }
@@ -174,61 +273,16 @@ impl DetailRouter {
             direction_entry: Direction::North,
         });
 
-        self.current_bounds_min = Position::new(
-            std::cmp::max(std::cmp::min(start.x, end.x) - 2, 0),
-            std::cmp::max(std::cmp::min(start.y, end.y) - 2, 1),
-            std::cmp::max(std::cmp::min(start.z, end.z) - 2, 0),
+        self.current_bounds_min = GridCellPosition::new(
+            std::cmp::max(std::cmp::min(start.x, end.x) - 2, WireCoord(0)),
+            std::cmp::max(std::cmp::min(start.y, end.y) - 2, 0),
+            std::cmp::max(std::cmp::min(start.z, end.z) - 2, WireCoord(0)),
         );
-        self.current_bounds_max = Position::new(
+        self.current_bounds_max = GridCellPosition::new(
             std::cmp::max(start.x, end.x) + 2,
             std::cmp::max(start.y, end.y) + 2,
             std::cmp::max(start.z, end.z) + 2,
         );
-
-        // Immediately claim the pins
-        match self.get_cell_mut(start.offset(Direction::Down))? {
-            v @ GridCell::Free => *v = GridCell::Claimed(id),
-            v @ GridCell::Blocked => *v = GridCell::Claimed(id),
-            GridCell::Occupied(net) => {
-                return Err(RoutingError::Unroutable).with_context(|| {
-                    anyhow!(
-                        "Support for start at {} is occupied by route {:?}",
-                        start,
-                        net
-                    )
-                })
-            }
-            GridCell::Claimed(claimer) if claimer == &id => {}
-            GridCell::Claimed(claimer) => {
-                return Err(RoutingError::Unroutable).with_context(|| {
-                    anyhow!(
-                        "Support for start at {} is occupied by route {:?}",
-                        start,
-                        claimer
-                    )
-                })
-            }
-        }
-
-        match self.get_cell_mut(end.offset(Direction::Down))? {
-            v @ GridCell::Free => *v = GridCell::Claimed(id),
-            v @ GridCell::Blocked => *v = GridCell::Claimed(id),
-            GridCell::Occupied(net) => {
-                return Err(RoutingError::Unroutable).with_context(|| {
-                    anyhow!("Support for end at {} is occupied by route {:?}", end, net)
-                })
-            }
-            GridCell::Claimed(claimer) if claimer == &id => {}
-            GridCell::Claimed(claimer) => {
-                return Err(RoutingError::Unroutable).with_context(|| {
-                    anyhow!(
-                        "Support for end at {} is occupied by route {:?}",
-                        end,
-                        claimer
-                    )
-                })
-            }
-        }
 
         while let Some(item) = routing_queue.pop() {
             debug!("Process queue item {} (cost: {})", item.pos, item.cost);
@@ -248,7 +302,7 @@ impl DetailRouter {
                 let mut min_pos = backtrack_pos;
                 let mut min_direction = Direction::North;
                 let mut min_is_step = StepDirection::NoStep;
-                let mut last_backtrack_pos = Position::new(0, 0, 0);
+                let mut last_backtrack_pos = GridCellPosition::new(WireCoord(0), 0, WireCoord(0));
 
                 while backtrack_pos != start {
                     let backtrack_pos_idx = self
@@ -264,45 +318,7 @@ impl DetailRouter {
                             "Bounds: {} {} for {:?}",
                             self.current_bounds_min, self.current_bounds_max, id
                         );
-                        for y in 0..self.current_bounds_max.y {
-                            {
-                                let mut bufz = String::new();
-
-                                for z in 0..self.current_bounds_max.z {
-                                    bufz.push_str(&format!("{:4} ", z))
-                                }
-                                for z in 0..self.current_bounds_max.z {
-                                    bufz.push_str(&format!("{:3} ", z))
-                                }
-                                info!(" -- y {} {}", y, bufz);
-                            }
-
-                            for x in 0..self.current_bounds_max.x {
-                                let mut buf_s = String::new();
-                                let mut buf_c = String::new();
-                                for z in 0..self.current_bounds_max.z {
-                                    let pos = Position::new(x, y, z);
-                                    let idx = self.pos_to_idx(pos).unwrap();
-                                    let score = self.score_grid[idx];
-                                    if score == std::u32::MAX {
-                                        buf_s.push_str("x__x ");
-                                    } else {
-                                        buf_s.push_str(&format!("{:4} ", score));
-                                    }
-                                    match self.grid[idx] {
-                                        GridCell::Free => buf_c.push_str("FFF "),
-                                        GridCell::Blocked => buf_c.push_str("BBB "),
-                                        GridCell::Occupied(RouteId(i)) => {
-                                            buf_c.push_str(&format!("O{:2} ", i))
-                                        }
-                                        GridCell::Claimed(RouteId(i)) => {
-                                            buf_c.push_str(&format!("C{:2} ", i))
-                                        }
-                                    }
-                                }
-                                info!("(x: {:2}) {} {}", x, buf_s, buf_c);
-                            }
-                        }
+                        self.debug_dump();
 
                         panic!()
                     }
@@ -317,8 +333,8 @@ impl DetailRouter {
                             );
                             return Ok(());
                         }
-                        if !self.check_connectivity(neighbor, backtrack_pos, id) {
-                            debug!("  Discard neighbor {} because it is unroutable", neighbor);
+                        if self.is_blocked(neighbor, id) {
+                            debug!("  Discard neighbor {} because it is blocked", neighbor);
                             return Ok(());
                         }
                         let idx = self
@@ -334,7 +350,8 @@ impl DetailRouter {
                         }
 
                         Ok(())
-                    })?;
+                    })
+                    .context("During backtrack neighbor search")?;
 
                     last_backtrack_pos = backtrack_pos;
                     backtrack_pos = min_pos;
@@ -345,39 +362,6 @@ impl DetailRouter {
                     .context("Failed to get index of final step in backtrack")?;
                 self.grid[backtrack_pos_idx] = GridCell::Occupied(id);
 
-                // Postprocessing: mark everything around the stuff we just occupied as claimed.
-                let claimed = GridCell::Claimed(id);
-                for y in 0..self.size_y {
-                    for z in 0..self.size_z {
-                        for x in 0..self.size_x {
-                            let pos = Position::new(x, y, z);
-                            if &GridCell::Occupied(id)
-                                != self.get_cell(pos).with_context(|| {
-                                    anyhow!("Testing if cell is occupied post-backtrack")
-                                })?
-                            {
-                                continue;
-                            }
-
-                            for d in ALL_DIRECTIONS {
-                                let pos = pos.offset(d);
-
-                                match self.get_cell_mut(pos) {
-                                    Ok(v) => match v {
-                                        v @ GridCell::Free => *v = claimed,
-                                        GridCell::Blocked => {}
-                                        GridCell::Occupied(_) => {}
-                                        GridCell::Claimed(_) => {}
-                                    },
-                                    Err(_) => {
-                                        // Walked off the side of the world, no problems
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
                 return Ok(());
             } else {
                 self.for_each_neighbor(item.pos, |neighbor, direction, is_step| {
@@ -387,10 +371,10 @@ impl DetailRouter {
                         return Ok(());
                     }
                     // Skip neighbors with invalid connectivity
-                    if !self.check_connectivity(item.pos, neighbor, id) {
+                    if self.is_blocked(neighbor, id) {
                         // Skip this cell because we can't route through it, but don't error
                         debug!(
-                            "Skipping {} because we can't route to it from {}",
+                            "Skipping {} because it's blocked from {}",
                             neighbor, item.pos
                         );
                         return Ok(());
@@ -406,7 +390,7 @@ impl DetailRouter {
                             50
                         } else {
                             // Skip this cell because we can't route through it, but don't error
-                            debug!("Skipping {} because we can't route through it", neighbor);
+                            debug!("Skipping {} because it's blocked by {:?}", neighbor, grid);
                             return Ok(());
                         }
                         - if direction == item.direction_entry {
@@ -415,8 +399,8 @@ impl DetailRouter {
                             0
                         }
                         + match is_step {
-                            StepDirection::StepUp => 10,
-                            StepDirection::StepDown => 10,
+                            StepDirection::StepUp => 1000,
+                            StepDirection::StepDown => 1000,
                             StepDirection::NoStep => 0,
                         };
                     if cost < self.score_grid[idx] {
@@ -429,156 +413,126 @@ impl DetailRouter {
                     }
 
                     Ok(())
-                })?
+                })
+                .context("Forward search neighbors")?
             }
         }
 
+        debug!("Failed to route net {:?} from {:?} to {:?}", id, start, end);
+        self.debug_dump();
         Err(RoutingError::Unroutable)?
     }
 
     #[inline]
-    pub fn get_cell(&self, pos: Position) -> Result<&GridCell> {
+    pub fn get_cell(&self, pos: GridCellPosition) -> Result<&GridCell> {
         // Unwrap is ok because pos_to_idx does bounds checking
         Ok(self.grid.get(self.pos_to_idx(pos)?).unwrap())
     }
 
     #[inline]
-    pub fn get_cell_mut(&mut self, pos: Position) -> Result<&mut GridCell> {
+    pub fn get_cell_mut(&mut self, pos: GridCellPosition) -> Result<&mut GridCell> {
         let idx = self.pos_to_idx(pos)?;
         Ok(self.grid.get_mut(idx).unwrap())
     }
 
     #[inline]
-    fn is_in_bounds(&self, pos: Position) -> bool {
+    fn is_in_bounds(&self, pos: GridCellPosition) -> bool {
         pos.in_bounding_box(&self.current_bounds_min, &self.current_bounds_max)
     }
 
     #[inline(always)]
-    fn pos_to_idx(&self, pos: Position) -> Result<usize> {
-        if pos.x < 0
+    fn pos_to_idx(&self, pos: GridCellPosition) -> Result<usize> {
+        if pos.x.0 < 0
             || pos.y < 0
-            || pos.z < 0
-            || pos.x >= self.size_x
+            || pos.z.0 < 0
+            || pos.x.0 >= self.size_x
             || pos.y >= self.size_y
-            || pos.z >= self.size_z
+            || pos.z.0 >= self.size_z
         {
             Err(RoutingError::OutOfBounds {
                 pos,
                 bounds: (self.size_x, self.size_y, self.size_z),
             })?
         } else {
-            let x = pos.x as usize;
+            let x = pos.x.0 as usize;
             let y = pos.y as usize;
-            let z = pos.z as usize;
+            let z = pos.z.0 as usize;
             Ok(x + z * self.zsi + y * self.ysi)
         }
     }
 
-    fn check_connectivity(&self, src: Position, dst: Position, route: RouteId) -> bool {
-        let delta_x = dst.x - src.x;
-        let delta_y = dst.y - src.y;
-        let delta_z = dst.z - src.z;
-
-        if !self.is_in_bounds(src) {
-            return false;
+    fn is_blocked(&self, pos: GridCellPosition, id: RouteId) -> bool {
+        match self.get_cell(pos) {
+            Ok(cell) => match cell {
+                GridCell::Free => false,
+                GridCell::Blocked => true,
+                GridCell::Occupied(s) => s != &id,
+                GridCell::Claimed(s) => s != &id,
+            },
+            Err(_) => true,
         }
-
-        let grid_at_dest = self.get_cell(dst).map(|v| *v).unwrap_or(GridCell::Blocked);
-        let dest_is_clear =
-            grid_at_dest == GridCell::Free || grid_at_dest == GridCell::Occupied(route);
-
-        // check if destination is too close to another line
-        let dest_will_not_interfere = !PLANAR_DIRECTIONS.iter().all(|d| {
-            let cell = self
-                .get_cell(dst.offset(*d))
-                .map(|v| *v)
-                .unwrap_or(GridCell::Blocked);
-
-            cell == GridCell::Free
-                || cell == GridCell::Occupied(route)
-                || cell == GridCell::Claimed(route)
-        });
-
-        let grid_below_dest = self
-            .get_cell(dst.offset(Direction::Down))
-            .map(|v| *v)
-            .unwrap_or(GridCell::Blocked);
-        let grid_below_dest_is_support =
-            grid_below_dest == GridCell::Free || grid_below_dest == GridCell::Claimed(route);
-
-        let grid_above_src = self
-            .get_cell(src.offset(Direction::Up))
-            .map(|v| *v)
-            .unwrap_or(GridCell::Blocked);
-
-        let grid_above_src_is_free =
-            grid_above_src == GridCell::Free || grid_above_src == GridCell::Claimed(route);
-
-        let grid_above_dst = self
-            .get_cell(dst.offset(Direction::Up))
-            .map(|v| *v)
-            .unwrap_or(GridCell::Blocked);
-        let grid_above_dst_is_free =
-            grid_above_dst == GridCell::Free || grid_above_dst == GridCell::Claimed(route);
-
-        debug!(
-            "Connectivity analysis from {} to {} says {:?}->{} {:?}->{} {:?}->{} {:?}->{}",
-            src,
-            dst,
-            grid_below_dest,
-            grid_below_dest_is_support,
-            grid_at_dest,
-            dest_is_clear,
-            grid_above_src,
-            grid_above_src_is_free,
-            grid_above_dst,
-            grid_above_dst_is_free
-        );
-
-        grid_below_dest_is_support
-            && dest_is_clear
-            && match (delta_x, delta_y, delta_z) {
-                // Simple cases: traversing in-plane is OK as long as the cell below the
-                // destination is usable and the destionation is clear
-                (-1, 0, 0) => true,
-                (1, 0, 0) => true,
-                (0, 0, -1) => true,
-                (0, 0, 1) => true,
-                // Step-up cases. Required grid above source as well as the cell below destination
-                (-1, 1, 0) => grid_above_src_is_free,
-                (1, 1, 0) => grid_above_src_is_free,
-                (0, 1, -1) => grid_above_src_is_free,
-                (0, 1, 1) => grid_above_src_is_free,
-                // Step-down cases. Required grid above source as well as the cell below destination
-                (-1, -1, 0) => grid_above_dst_is_free,
-                (1, -1, 0) => grid_above_dst_is_free,
-                (0, -1, -1) => grid_above_dst_is_free,
-                (0, -1, 1) => grid_above_dst_is_free,
-                // Deltas are out of range
-                _ => false,
-            }
     }
 
     fn for_each_neighbor(
         &self,
-        pos: Position,
-        mut f: impl FnMut(Position, Direction, StepDirection) -> Result<()>,
+        pos: GridCellPosition,
+        mut f: impl FnMut(GridCellPosition, Direction, StepDirection) -> Result<()>,
     ) -> Result<()> {
         for d in PLANAR_DIRECTIONS {
-            f(pos.offset(d), d, StepDirection::NoStep)?;
+            f(pos.offset(d), d, StepDirection::NoStep).context("in-plane direction")?;
             f(
-                pos.offset(d).offset(Direction::Up),
+                pos.offset(d).offset(Direction::Up).offset(d),
                 d,
                 StepDirection::StepUp,
-            )?;
+            )
+            .context("step up direction")?;
             f(
-                pos.offset(d).offset(Direction::Down),
+                pos.offset(d).offset(Direction::Down).offset(d),
                 d,
                 StepDirection::StepDown,
-            )?;
+            )
+            .context("step down direction")?;
         }
 
         Ok(())
+    }
+
+    fn debug_dump(&self) {
+        for y in 0..self.current_bounds_max.y {
+            {
+                let mut bufz = String::new();
+
+                for z in 0..self.current_bounds_max.z.0 {
+                    bufz.push_str(&format!("{:4} ", z))
+                }
+                for z in 0..self.current_bounds_max.z.0 {
+                    bufz.push_str(&format!("{:3} ", z))
+                }
+                debug!(" -- y {} {}", y, bufz);
+            }
+
+            for x in 0..self.current_bounds_max.x.0 {
+                let mut buf_s = String::new();
+                let mut buf_c = String::new();
+                for z in 0..self.current_bounds_max.z.0 {
+                    let pos = GridCellPosition::new(WireCoord(x), y, WireCoord(z));
+                    let idx = self.pos_to_idx(pos).unwrap();
+                    let score = self.score_grid[idx];
+                    if score == std::u32::MAX {
+                        buf_s.push_str("x__x ");
+                    } else {
+                        buf_s.push_str(&format!("{:4} ", score));
+                    }
+                    match self.grid[idx] {
+                        GridCell::Free => buf_c.push_str("FFF "),
+                        GridCell::Blocked => buf_c.push_str("BBB "),
+                        GridCell::Occupied(RouteId(i)) => buf_c.push_str(&format!("O{:2} ", i)),
+                        GridCell::Claimed(RouteId(i)) => buf_c.push_str(&format!("C{:2} ", i)),
+                    }
+                }
+                debug!("(x: {:2}) {} {}", x, buf_s, buf_c);
+            }
+        }
     }
 }
 
@@ -586,7 +540,7 @@ impl DetailRouter {
 pub enum RoutingError {
     Unroutable,
     OutOfBounds {
-        pos: Position,
+        pos: GridCellPosition,
         bounds: (i32, i32, i32),
     },
 }
@@ -599,7 +553,7 @@ impl Display for RoutingError {
             Self::Unroutable => write!(f, "path was unroutable"),
             Self::OutOfBounds {
                 pos:
-                    Position {
+                    GridCellPosition {
                         ref x,
                         ref y,
                         ref z,
@@ -608,7 +562,7 @@ impl Display for RoutingError {
             } => write!(
                 f,
                 "access out of bounds: ({}, {}, {}) exceeds ({}, {}, {})",
-                x, y, z, bx, by, bz
+                x.0, y, z.0, bx, by, bz
             ),
         }
     }

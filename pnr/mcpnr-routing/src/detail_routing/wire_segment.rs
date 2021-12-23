@@ -1,7 +1,6 @@
 use std::ops::{Add, Sub};
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use log::debug;
 use mcpnr_common::block_storage::{Block, BlockStorage};
 
 use crate::detail_routing::Position;
@@ -11,8 +10,8 @@ use super::{Direction, Layer};
 pub const WIRE_GRID_SCALE: i32 = 2;
 
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct WireCoord(i32);
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct WireCoord(pub i32);
 
 impl WireCoord {
     pub fn from_block_coord(v: i32) -> Self {

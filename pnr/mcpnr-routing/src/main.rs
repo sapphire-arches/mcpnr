@@ -6,10 +6,10 @@ mod structure_cache;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use detail_routing::wire_segment::{splat_wire_segment, LayerPosition, WireTierLayer};
-use detail_routing::{DetailRouter, GridCell, Layer, RoutingError};
+use detail_routing::{DetailRouter, GridCell, GridCellPosition, Layer, RoutingError};
 use log::{error, info, warn};
 use mcpnr_common::block_storage::{
-    Block, BlockStorage, Direction, Position, PropertyValue, PLANAR_DIRECTIONS, ALL_DIRECTIONS,
+    Block, BlockStorage, Direction, Position, PropertyValue, ALL_DIRECTIONS, PLANAR_DIRECTIONS,
 };
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
@@ -18,6 +18,7 @@ use splat::Splatter;
 use std::path::PathBuf;
 use structure_cache::StructureCache;
 
+use crate::detail_routing::LAYERS_PER_TIER;
 use crate::detail_routing::wire_segment::WIRE_GRID_SCALE;
 
 #[repr(transparent)]
@@ -168,55 +169,8 @@ fn do_splat(
             let (pn, _) = splat_wire_segment(output_structure, p, s, e)?;
             p = pn;
         }
-    } else {
-        let mut splat_wires = |mut p, wires: &[(WireTierLayer, Direction)]| -> Result<()> {
-            for i in 1..wires.len() {
-                let s = wires[(i + wires.len() - 1) % wires.len()];
-                let e = wires[i];
-                info!("{:?} -> {:?} at {:?}", s, e, p);
-                let (pn, _) = splat_wire_segment(output_structure, p, s, e)?;
-                p = pn;
-            }
-
-            Ok(())
-        };
-
-        splat_wires(
-            LayerPosition::new(1.into(), 1.into()),
-            &[
-                (WireTierLayer::new(0, Layer::LI), Direction::South),
-                (WireTierLayer::new(0, Layer::LI), Direction::South),
-                (WireTierLayer::new(0, Layer::LI), Direction::South),
-                (WireTierLayer::new(0, Layer::LI), Direction::South),
-                (WireTierLayer::new(0, Layer::LI), Direction::East),
-            ],
-        )?;
-        splat_wires(
-            LayerPosition::new(0.into(), 1.into()),
-            &[
-                (WireTierLayer::new(0, Layer::LI), Direction::South),
-                (WireTierLayer::new(0, Layer::LI), Direction::South),
-                (WireTierLayer::new(0, Layer::M0), Direction::East),
-                (WireTierLayer::new(0, Layer::M0), Direction::North),
-                (WireTierLayer::new(0, Layer::M0), Direction::North),
-                (WireTierLayer::new(0, Layer::M0), Direction::East),
-                (WireTierLayer::new(0, Layer::M0), Direction::South),
-                (WireTierLayer::new(0, Layer::LI), Direction::South),
-            ],
-        )?;
-        splat_wires(
-            LayerPosition::new(2.into(), 5.into()),
-            &[
-                (WireTierLayer::new(0, Layer::LI), Direction::South),
-                (WireTierLayer::new(0, Layer::LI), Direction::East),
-                (WireTierLayer::new(0, Layer::LI), Direction::North),
-                (WireTierLayer::new(0, Layer::LI), Direction::North),
-                (WireTierLayer::new(0, Layer::LI), Direction::North),
-                (WireTierLayer::new(0, Layer::LI), Direction::North),
-                (WireTierLayer::new(0, Layer::LI), Direction::North),
-            ],
-        )?;
     }
+
     Ok(())
 }
 
@@ -227,18 +181,21 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
         return Ok(());
     }
 
+    info!("Begin routing");
+
     let router = {
         let mut router = DetailRouter::new(
-            extents[0] / WIRE_GRID_SCALE as u32,
-            config.tiers,
-            extents[2] / WIRE_GRID_SCALE as u32,
+            extents[0] + (WIRE_GRID_SCALE as u32 - 1) / WIRE_GRID_SCALE as u32,
+            config.tiers * LAYERS_PER_TIER,
+            extents[2] + (WIRE_GRID_SCALE as u32 - 1) / WIRE_GRID_SCALE as u32,
         );
 
         {
-            let mut mark_in_extents = |pos, v| match router.get_cell_mut(pos) {
-                Ok(vm) => *vm = v,
-                Err(_) => {}
-            };
+            let mut mark_in_extents =
+                |pos: Position, v| match pos.try_into().and_then(|pos| router.get_cell_mut(pos)) {
+                    Ok(vm) => *vm = v,
+                    Err(_) => {}
+                };
 
             for ((x, y, z), block) in output.iter_block_coords() {
                 if (y % 16) > 8 {
@@ -360,15 +317,17 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
 
                 for pin in net.iter_sinks(netlist) {
                     let pos = Position::new(pin.x as i32, pin.y as i32, pin.z as i32);
-                    let _ = router.get_cell_mut(pos).map(|c| *c = occupied);
+                    let _ = router.get_cell_mut(pos.try_into()?).map(|c| *c = occupied);
                 }
 
                 for pin in net.iter_drivers(netlist) {
                     let pos = Position::new(pin.x as i32, pin.y as i32, pin.z as i32);
-                    let _ = router.get_cell_mut(pos).map(|c| *c = occupied);
+                    let _ = router.get_cell_mut(pos.try_into()?).map(|c| *c = occupied);
                 }
             }
         }
+
+        info!("Initial blocker mark done");
 
         for (net_idx, net) in netlist.iter_nets() {
             let net_idx: u32 = (*net_idx)
@@ -387,6 +346,7 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
             }
 
             let start = Position::new(driver.x as i32, driver.y as i32, driver.z as i32);
+            let start: GridCellPosition = start.try_into()?;
             if let GridCell::Occupied(RouteId(id)) = router.get_cell(start)? {
                 if id != &net_idx {
                     warn!(
@@ -395,11 +355,13 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
                     )
                 }
             }
-            *(router.get_cell_mut(start)?) = GridCell::Occupied(RouteId(net_idx));
+            *(router.get_cell_mut(start).context("Get start cell")?) =
+                GridCell::Occupied(RouteId(net_idx));
 
             for sink in net.iter_sinks(netlist) {
                 let end = Position::new(sink.x as i32, sink.y as i32, sink.z as i32);
-                if let GridCell::Occupied(RouteId(id)) = router.get_cell(end)? {
+                let end: GridCellPosition = end.try_into()?;
+                if let GridCell::Occupied(RouteId(id)) = router.get_cell(end).context("Get end cell")? {
                     if id != &net_idx {
                         warn!(
                             "Ending position of net {} at {} is occupied by another net {}",
@@ -407,7 +369,8 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
                         );
                     }
                 }
-                *(router.get_cell_mut(end)?) = GridCell::Occupied(RouteId(net_idx));
+                *(router.get_cell_mut(end).context("Get end cell")?) =
+                    GridCell::Occupied(RouteId(net_idx));
 
                 match router.route(start, end, RouteId(net_idx)) {
                     Ok(_) => {}
@@ -474,7 +437,7 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
             let y = y as i32;
             let z = z as i32;
             match router
-                .get_cell(Position::new(x, y, z))
+                .get_cell(Position::new(x, y, z).try_into()?)
                 .context("Failed to get router cell in wire splat")?
             {
                 GridCell::Free => {}
