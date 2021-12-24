@@ -385,7 +385,9 @@ impl<'nets> Router<'nets> {
                 let net_idx: u32 = (*net_idx)
                     .try_into()
                     .with_context(|| anyhow!("Convert net_idx {}", net_idx))?;
-                if (self.routing_pass + net_idx) % 30 == 0 {
+                if (self.routing_pass + net_idx) % 30 == 0
+                    && self.routing_pass != MAX_ROUTING_PASSES - 1
+                {
                     info!("Rip up net {}", net_idx);
                     self.net_states
                         .get_mut(&net_idx)
@@ -589,12 +591,14 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
                 let tier = pos.y as u32 / LAYERS_PER_TIER;
                 let layer = Layer::from_compact_idx(pos.y % LAYERS_PER_TIER as i32)?;
                 let wire_pos = (WireTierLayer::new(tier, layer), prev_direction);
-                splat_wire_segment(
+                if let Err(e) = splat_wire_segment(
                     output,
                     LayerPosition::new(pos.x, pos.z),
                     wire_pos,
                     (wire_pos.0, d),
-                )?;
+                ) {
+                    warn!("Failed to splat wire at {:?}: {}", wire_pos, e);
+                }
 
                 prev_direction = d;
                 pos = pos.offset(d);

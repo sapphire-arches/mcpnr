@@ -2,7 +2,7 @@ use crate::RouteId;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use itertools::Itertools;
 use log::{debug, info};
-use mcpnr_common::block_storage::{Direction, Position, PLANAR_DIRECTIONS};
+use mcpnr_common::block_storage::{Direction, Position, ALL_DIRECTIONS, PLANAR_DIRECTIONS};
 use std::{collections::BinaryHeap, fmt::Display};
 
 use self::wire_segment::WireCoord;
@@ -20,9 +20,6 @@ pub enum GridCell {
     Blocked,
     /// Occupied by a net with the given RouteId, driver is in the given Direction
     Occupied(Direction, RouteId),
-    /// Claimed by a net with the given RouteId (not directly on the route, but required to remain
-    /// clear of other net routes to avoid DRC errors
-    Claimed(RouteId),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -308,6 +305,38 @@ impl DetailRouter {
         let start = start.offset(start_direction.mirror());
         let end = end.offset(end_direction);
 
+        match self.get_cell(start)? {
+            GridCell::Free => {}
+            GridCell::Blocked => {
+                return Err(RoutingError::Unroutable)
+                    .context("Start pin points directly at an unroutable cell")
+            }
+            GridCell::Occupied(_, i) => {
+                if *i != id {
+                    return Err(RoutingError::Unroutable).context(anyhow!(
+                        "Start pin points directly at a cell already occupied by route {:?}",
+                        id
+                    ));
+                }
+            }
+        };
+
+        match self.get_cell(start)? {
+            GridCell::Free => {}
+            GridCell::Blocked => {
+                return Err(RoutingError::Unroutable)
+                    .context("End pin points directly at an unroutable cell")
+            }
+            GridCell::Occupied(_, i) => {
+                if *i != id {
+                    return Err(RoutingError::Unroutable).context(anyhow!(
+                        "End pin points directly at a cell already occupied by route {:?}",
+                        id
+                    ));
+                }
+            }
+        };
+
         let mut routing_queue = BinaryHeap::new();
 
         // Routing should start at the cell specified by the direction of the pin
@@ -362,19 +391,10 @@ impl DetailRouter {
                                         return Ok(());
                                     }
                                 }
-                                GridCell::Claimed(_) => {
-                                    // Skip this cell because we can't route through it, but don't error
-                                    debug!(
-                                        "Skipping {} because it's blocked by {:?}",
-                                        neighbor, grid
-                                    );
-                                    return Ok(());
-                                }
                             }
-                            + match is_step {
-                                StepDirection::StepUp => 1000,
-                                StepDirection::StepDown => 1000,
-                                StepDirection::NoStep => 0,
+                            + match direction {
+                                Direction::Up | Direction::Down => 1000,
+                                _ => 0,
                             };
                         if cost < self.score_grid[idx] {
                             debug!("Pushing item for {} (cost: {})", neighbor, cost);
@@ -525,7 +545,6 @@ impl DetailRouter {
                 GridCell::Free => false,
                 GridCell::Blocked => true,
                 GridCell::Occupied(d, s) => *d == illegal_direction || s != &id,
-                GridCell::Claimed(s) => s != &id,
             },
             Err(_) => true,
         }
@@ -539,7 +558,7 @@ impl DetailRouter {
         mut f: impl FnMut(GridCellPosition, Direction, StepDirection) -> Result<()>,
     ) -> Result<()> {
         let illegal_direction = entry_direction.mirror();
-        for d in PLANAR_DIRECTIONS {
+        for d in ALL_DIRECTIONS {
             let neighbor = pos.offset(d);
             if d == illegal_direction {
                 // Can't double back
@@ -558,22 +577,6 @@ impl DetailRouter {
                 continue;
             }
             f(neighbor, d, StepDirection::NoStep).context("in-plane direction")?;
-
-            // Need to ensure the landing of the ramp is free
-            // and (conservatively) the space under the ramp is free
-            // wires under the ramp should be OK but we don't allow that for now
-            let neighbor_up = neighbor.offset(Direction::Up);
-            if !self.is_blocked(neighbor_up, id, illegal_direction) {
-                f(neighbor_up, d, StepDirection::StepUp).context("step up direction")?;
-            }
-
-            // Similar to above, but we check the space below us and the landing cell
-            let neighbor_down = neighbor.offset(Direction::Down);
-            if !self.is_blocked(pos.offset(Direction::Down), id, illegal_direction)
-                && !self.is_blocked(neighbor_down, id, illegal_direction)
-            {
-                f(neighbor_down, d, StepDirection::StepDown).context("step down direction")?;
-            }
         }
 
         Ok(())
@@ -584,7 +587,6 @@ impl DetailRouter {
         for (i, cell) in self.grid.iter_mut().enumerate() {
             match cell {
                 GridCell::Occupied(_, i) if *i == id => *cell = GridCell::Free,
-                GridCell::Claimed(i) if *i == id => *cell = GridCell::Free,
                 _ => {}
             }
         }
@@ -632,7 +634,6 @@ impl DetailRouter {
                             };
                             buf_c.push_str(&format!("{}{:2} ", dc, i))
                         }
-                        GridCell::Claimed(RouteId(i)) => buf_c.push_str(&format!("C{:2} ", i)),
                     }
                 }
                 debug!("(x: {:2}) {} {}", x, buf_s, buf_c);
