@@ -8,9 +8,18 @@ module top (
     .POS_X(0),
     .POS_Y(0),
     .POS_Z(0),
-    .NSWITCH(2),
-  ) input_switches (
-    .O({a, b}),
+    .NSWITCH(1),
+  ) input_switch_a (
+    .O(a),
+  );
+
+  MCPNR_SWITCHES #(
+    .POS_X(4),
+    .POS_Y(0),
+    .POS_Z(0),
+    .NSWITCH(1),
+  ) input_switch_b (
+    .O(b),
   );
 
   MCPNR_LIGHTS #(
