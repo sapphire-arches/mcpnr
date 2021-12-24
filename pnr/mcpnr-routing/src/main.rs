@@ -207,9 +207,6 @@ impl<'nets> Router<'nets> {
             };
 
             for ((x, y, z), block) in output.iter_block_coords() {
-                if (y % 16) > 8 {
-                    continue;
-                }
                 let x = x as i32;
                 let y = y as i32;
                 let z = z as i32;
@@ -270,6 +267,7 @@ impl<'nets> Router<'nets> {
                             }
                         };
 
+                        info!("Mark known pin at {:?}", grid_cell);
                         known_pins.insert(grid_cell, d);
                     }
                     "minecraft:redstone_torch" | "minecraft:redstone_wall_torch" => {
