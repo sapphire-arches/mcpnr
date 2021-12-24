@@ -7,14 +7,13 @@ mod structure_cache;
 use anyhow::{anyhow, ensure, Context, Result};
 use detail_routing::wire_segment::{splat_wire_segment, LayerPosition, WireTierLayer};
 use detail_routing::{DetailRouter, GridCell, GridCellPosition, Layer, RoutingError};
-use itertools::Itertools;
 use log::{error, info, warn};
 use mcpnr_common::block_storage::{
     Block, BlockStorage, Direction, Position, PropertyValue, ALL_DIRECTIONS, PLANAR_DIRECTIONS,
 };
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
-use netlist::Netlist;
+use netlist::{Net, Netlist};
 use splat::Splatter;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -30,7 +29,6 @@ pub struct RouteId(pub u32);
 #[derive(Clone, Debug)]
 struct Config {
     input_file: PathBuf,
-    techlib_directory: PathBuf,
     structure_directory: PathBuf,
     output_file: PathBuf,
     tiers: u32,
@@ -74,7 +72,6 @@ fn parse_args() -> Result<Config> {
         input_file: PathBuf::from(matches.value_of_os("INPUT").unwrap()),
         output_file: PathBuf::from(matches.value_of_os("OUTPUT").unwrap()),
         structure_directory: techlib_directory.join("structures"),
-        techlib_directory,
         tiers: matches
             .value_of("TIERS")
             .ok_or_else(|| -> ! { unreachable!() })?
@@ -105,7 +102,6 @@ fn block_facing(block: &Block) -> Option<Direction> {
 const GEN_TEST_SQUARES: bool = false;
 
 fn do_splat(
-    config: &Config,
     design: &PlacedDesign,
     structure_cache: &StructureCache,
     output_structure: &mut BlockStorage,
@@ -123,9 +119,6 @@ fn do_splat(
     }
 
     if GEN_TEST_SQUARES {
-        let b_torch =
-            output_structure.add_new_block_type(Block::new("minecraft:redstone_torch".into()));
-
         // Square of wires
         // Each side has 5 steps LI -> M0, M0 -> M1, M1 -> M1, M1 -> M0, M0 -> LI and corners (so 7
         // total wire cells)
@@ -176,17 +169,27 @@ fn do_splat(
     Ok(())
 }
 
-fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
-    let extents = output.extents().clone();
+#[derive(PartialEq, Eq)]
+enum NetState {
+    Unrouted,
+    RippedUpInPass(u32),
+    Routed,
+}
 
-    if GEN_TEST_SQUARES {
-        return Ok(());
-    }
+const MAX_ROUTING_PASSES: u32 = 30;
 
-    info!("Begin routing");
+struct Router<'nets> {
+    netlist: &'nets Netlist,
+    net_states: HashMap<u32, (NetState, &'nets Net)>,
+    known_pins: HashMap<GridCellPosition, Direction>,
+    detail_router: DetailRouter,
+    routing_pass: u32,
+}
 
-    let router = {
-        let mut router = DetailRouter::new(
+impl<'nets> Router<'nets> {
+    fn new(config: &Config, netlist: &'nets Netlist, output: &mut BlockStorage) -> Result<Self> {
+        let extents = output.extents().clone();
+        let mut detail_router = DetailRouter::new(
             extents[0] + (WIRE_GRID_SCALE as u32 - 1) / WIRE_GRID_SCALE as u32,
             config.tiers * LAYERS_PER_TIER,
             extents[2] + (WIRE_GRID_SCALE as u32 - 1) / WIRE_GRID_SCALE as u32,
@@ -195,11 +198,13 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
         let mut known_pins: HashMap<GridCellPosition, Direction> = HashMap::new();
 
         {
-            let mut mark_in_extents =
-                |pos: Position, v| match pos.try_into().and_then(|pos| router.get_cell_mut(pos)) {
-                    Ok(vm) => *vm = v,
-                    Err(_) => {}
-                };
+            let mut mark_in_extents = |pos: Position, v| match pos
+                .try_into()
+                .and_then(|pos| detail_router.get_cell_mut(pos))
+            {
+                Ok(vm) => *vm = v,
+                Err(_) => {}
+            };
 
             for ((x, y, z), block) in output.iter_block_coords() {
                 if (y % 16) > 8 {
@@ -354,138 +359,168 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
 
         info!("Initial blocker mark done");
 
-        let mut routing_pass = 0;
-
-        const MAX_ROUTING_PASSES: u32 = 30;
-
-        #[derive(PartialEq, Eq)]
-        enum NetState {
-            Unrouted,
-            RippedUpInPass(u32),
-            Routed,
-        }
-
         // TODO: use unrandomized hashermap
-        let mut net_states: HashMap<i64, (NetState, &netlist::Net)> = netlist
+        let net_states: HashMap<u32, (NetState, &netlist::Net)> = netlist
             .iter_nets()
-            .map(|(net_idx, net)| (*net_idx, (NetState::Unrouted, net)))
+            .map(|(net_idx, net)| (*net_idx as u32, (NetState::Unrouted, net)))
             .collect();
 
-        while routing_pass < MAX_ROUTING_PASSES
-            && net_states.values().any(|(s, _)| *s != NetState::Routed)
+        Ok(Self {
+            detail_router,
+            netlist,
+            net_states,
+            known_pins,
+            routing_pass: 0,
+        })
+    }
+
+    fn rnr_loop(&mut self) -> Result<()> {
+        self.routing_pass = 0;
+        while self.routing_pass < MAX_ROUTING_PASSES
+            && self
+                .net_states
+                .values()
+                .any(|(s, _)| *s != NetState::Routed)
         {
-            info!("Begin routing pass {}", routing_pass);
-            for (net_idx, net) in netlist.iter_nets() {
+            info!("Begin routing pass {}", self.routing_pass);
+            for (net_idx, net) in self.netlist.iter_nets() {
                 let net_idx: u32 = (*net_idx)
                     .try_into()
                     .with_context(|| anyhow!("Convert net_idx {}", net_idx))?;
-                if (routing_pass + net_idx) % 30 == 0 {
+                if (self.routing_pass + net_idx) % 30 == 0 {
                     info!("Rip up net {}", net_idx);
-                    net_states
-                        .get_mut(&(net_idx as i64))
-                        .map(|v| v.0 = NetState::RippedUpInPass(routing_pass));
-                    // TODO: make this more efficient
-                    let pins: Vec<_> = net
-                        .iter_sinks(netlist)
-                        .chain(net.iter_drivers(netlist))
-                        .map(|pin| -> Result<_> {
-                            let pos = Position::new(pin.x as i32, pin.y as i32, pin.z as i32);
-                            let pos: GridCellPosition = pos.try_into()?;
-                            Ok(pos)
-                        })
-                        .try_collect()?;
+                    self.net_states
+                        .get_mut(&net_idx)
+                        .map(|v| v.0 = NetState::RippedUpInPass(self.routing_pass));
 
-                    router
-                        .rip_up(RouteId(net_idx), &pins)
+                    self.detail_router
+                        .rip_up(RouteId(net_idx))
                         .with_context(|| anyhow!("Rip up net {:?}", net_idx))?;
-                }
-            }
 
-            for (net_idx, net) in netlist.iter_nets() {
-                match net_states[net_idx].0 {
-                    NetState::RippedUpInPass(p) if p == routing_pass => continue,
-                    NetState::Routed => continue,
-                    _ => {}
-                }
-
-                let net_idx: u32 = (*net_idx)
-                    .try_into()
-                    .with_context(|| anyhow!("Convert net_idx {}", net_idx))?;
-                let mut drivers = net.iter_drivers(netlist);
-                let driver = match drivers.next() {
-                    Some(driver) => driver,
-                    None => {
-                        warn!("Undriven net {:?}", net);
-                        continue;
-                    }
-                };
-                if drivers.next().is_some() {
-                    return Err(anyhow!("Driver-Driver conflict in net {:?}", net));
-                }
-
-                let start = Position::new(driver.x as i32, driver.y as i32, driver.z as i32);
-                let start: GridCellPosition = start.try_into()?;
-                if let GridCell::Occupied(_, RouteId(id)) = router.get_cell(start)? {
-                    if id != &net_idx {
-                        warn!(
-                            "Starting position of net {} at {} is occupied by another net {}",
-                            net_idx, start, id
-                        )
-                    }
-                }
-                let start_direction = known_pins
-                    .get(&start)
-                    .ok_or_else(|| anyhow!("Failed to find driver pin {}", start))?;
-                *(router.get_cell_mut(start).context("Get start cell")?) =
-                    GridCell::Occupied(*start_direction, RouteId(net_idx));
-
-                let mut this_net_all_routed = true;
-
-                for sink in net.iter_sinks(netlist) {
-                    let end = Position::new(sink.x as i32, sink.y as i32, sink.z as i32);
-                    let end: GridCellPosition = end.try_into()?;
-                    if let GridCell::Occupied(_, RouteId(id)) =
-                        router.get_cell(end).context("Get end cell")?
+                    for pin in net
+                        .iter_sinks(self.netlist)
+                        .chain(net.iter_drivers(self.netlist))
                     {
-                        if id != &net_idx {
-                            warn!(
-                                "Ending position of net {} at {} is occupied by another net {}",
-                                net_idx, end, id
-                            );
-                        }
+                        let pos = Position::new(pin.x as i32, pin.y as i32, pin.z as i32);
+                        let pos: GridCellPosition = pos.try_into()?;
+                        let pin_direction = self
+                            .known_pins
+                            .get(&pos)
+                            .ok_or_else(|| anyhow!("Failed to find pin {}", pos))?;
+                        *(self
+                            .detail_router
+                            .get_cell_mut(pos)
+                            .context("Get start cell")?) =
+                            GridCell::Occupied(*pin_direction, RouteId(net_idx));
                     }
-                    let end_direction = known_pins
-                        .get(&end)
-                        .ok_or_else(|| anyhow!("Failed to find sink pin {}", end))?;
-                    *(router.get_cell_mut(end).context("Get end cell")?) =
-                        GridCell::Occupied(*end_direction, RouteId(net_idx));
-
-                    match router.route(start, end, RouteId(net_idx)) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            if let Some(RoutingError::Unroutable) = e.downcast_ref() {
-                                warn!("Failed to route net {:?} {:?}", driver, sink);
-                                this_net_all_routed = false;
-                                continue;
-                            } else {
-                                return Err(e);
-                            }
-                        }
-                    }
-                }
-
-                if this_net_all_routed {
-                    net_states
-                        .get_mut(&(net_idx as i64))
-                        .map(|v| v.0 = NetState::Routed);
                 }
             }
 
-            routing_pass += 1;
+            for (net_idx, _) in self.netlist.iter_nets() {
+                self.route_net(*net_idx as u32)
+                    .with_context(|| anyhow!("Route net {:?}", net_idx))?;
+            }
+
+            self.routing_pass += 1;
         }
 
-        router
-    };
+        Ok(())
+    }
+
+    fn route_net(&mut self, net_idx: u32) -> Result<()> {
+        let (net_state, net) = &self.net_states[&net_idx];
+        match net_state {
+            NetState::RippedUpInPass(p) if *p == self.routing_pass => return Ok(()),
+            NetState::Routed => return Ok(()),
+            _ => {}
+        }
+
+        let mut drivers = net.iter_drivers(self.netlist);
+        let driver = match drivers.next() {
+            Some(driver) => driver,
+            None => {
+                warn!("Undriven net {:?}", net);
+                return Ok(());
+            }
+        };
+        if drivers.next().is_some() {
+            return Err(anyhow!("Driver-Driver conflict in net {:?}", net));
+        }
+
+        let start = Position::new(driver.x as i32, driver.y as i32, driver.z as i32);
+        let start: GridCellPosition = start.try_into()?;
+        if let GridCell::Occupied(_, RouteId(id)) = self.detail_router.get_cell(start)? {
+            if id != &net_idx {
+                warn!(
+                    "Starting position of net {} at {} is occupied by another net {}",
+                    net_idx, start, id
+                )
+            }
+        }
+        let start_direction = self
+            .known_pins
+            .get(&start)
+            .ok_or_else(|| anyhow!("Failed to find driver pin {}", start))?;
+        *(self
+            .detail_router
+            .get_cell_mut(start)
+            .context("Get start cell")?) = GridCell::Occupied(*start_direction, RouteId(net_idx));
+
+        let mut this_net_all_routed = true;
+
+        for sink in net.iter_sinks(self.netlist) {
+            let end = Position::new(sink.x as i32, sink.y as i32, sink.z as i32);
+            let end: GridCellPosition = end.try_into()?;
+            if let GridCell::Occupied(_, RouteId(id)) =
+                self.detail_router.get_cell(end).context("Get end cell")?
+            {
+                if id != &net_idx {
+                    warn!(
+                        "Ending position of net {} at {} is occupied by another net {}",
+                        net_idx, end, id
+                    );
+                }
+            }
+            let end_direction = self
+                .known_pins
+                .get(&end)
+                .ok_or_else(|| anyhow!("Failed to find sink pin {}", end))?;
+            *(self
+                .detail_router
+                .get_cell_mut(end)
+                .context("Get end cell")?) = GridCell::Occupied(*end_direction, RouteId(net_idx));
+
+            match self.detail_router.route(start, end, RouteId(net_idx)) {
+                Ok(_) => {}
+                Err(e) => {
+                    if let Some(RoutingError::Unroutable) = e.downcast_ref() {
+                        warn!("Failed to route net {:?} {:?}", driver, sink);
+                        this_net_all_routed = false;
+                        continue;
+                    } else {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        if this_net_all_routed {
+            self.net_states
+                .get_mut(&net_idx)
+                .map(|v| v.0 = NetState::Routed);
+        }
+
+        Ok(())
+    }
+}
+
+fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Result<()> {
+    if GEN_TEST_SQUARES {
+        return Ok(());
+    }
+
+    let mut router = Router::new(config, netlist, output)?;
+    router.rnr_loop()?;
 
     let b_wools = [
         "minecraft:white_wool",
@@ -524,7 +559,7 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
     .into_iter()
     .map(|ty| output.add_new_block_type(Block::new(ty.into())))
     .collect::<Vec<_>>();
-    let b_glass = output.add_new_block_type(Block::new("minecraft:glass".into()));
+    // let b_glass = output.add_new_block_type(Block::new("minecraft:glass".into()));
 
     {
         for ((x, y, z), block) in output.iter_block_coords_mut() {
@@ -532,6 +567,7 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
             let y = y as i32;
             let z = z as i32;
             match router
+                .detail_router
                 .get_cell(Position::new(x, y, z).try_into()?)
                 .context("Failed to get router cell in wire splat")?
             {
@@ -589,7 +625,6 @@ fn main() -> Result<()> {
     structure_cache.build_palette_maps(&mut output_structure)?;
 
     do_splat(
-        &config,
         &placed_design,
         &structure_cache,
         &mut output_structure,
