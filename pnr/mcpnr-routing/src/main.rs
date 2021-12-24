@@ -6,8 +6,8 @@ mod structure_cache;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use detail_routing::wire_segment::{splat_wire_segment, LayerPosition, WireTierLayer};
-use detail_routing::{DetailRouter, GridCell, GridCellPosition, Layer, RoutingError};
-use log::{error, info, warn};
+use detail_routing::{DetailRouter, GridCell, GridCellPosition, Layer, RoutingError, ALL_LAYERS};
+use log::{debug, error, info, warn};
 use mcpnr_common::block_storage::{
     Block, BlockStorage, Direction, Position, PropertyValue, ALL_DIRECTIONS, PLANAR_DIRECTIONS,
 };
@@ -254,10 +254,10 @@ impl<'nets> Router<'nets> {
                                     9 => Direction::North,
                                     10 => Direction::North,
                                     11 => Direction::North,
-                                    12 => Direction::East,
-                                    13 => Direction::East,
-                                    14 => Direction::East,
-                                    15 => Direction::East,
+                                    12 => Direction::West,
+                                    13 => Direction::West,
+                                    14 => Direction::West,
+                                    15 => Direction::West,
                                     _ => {
                                         warn!("Pin has out of range rotation information {} at {}, assuming South", v, pos);
                                         Direction::South
@@ -505,6 +505,7 @@ impl<'nets> Router<'nets> {
         }
 
         if this_net_all_routed {
+            info!("Mark net {:?} routed", net_idx);
             self.net_states
                 .get_mut(&net_idx)
                 .map(|v| v.0 = NetState::Routed);
@@ -561,34 +562,44 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
     .collect::<Vec<_>>();
     // let b_glass = output.add_new_block_type(Block::new("minecraft:glass".into()));
 
-    {
-        for ((x, y, z), block) in output.iter_block_coords_mut() {
-            let x = x as i32;
-            let y = y as i32;
-            let z = z as i32;
-            match router
+    info!("Begin wire splats");
+    for (net_idx, net) in netlist.iter_nets() {
+        let net_idx = *net_idx as u32;
+        for pin in net.iter_sinks(netlist) {
+            let pos = Position::new(pin.x as i32, pin.y as i32, pin.z as i32);
+            let mut pos: GridCellPosition = pos.try_into()?;
+            let mut prev_direction = *router.known_pins.get(&pos).unwrap();
+
+            // TODO: actually route out of the cell
+            pos = pos.offset(prev_direction);
+            debug!(
+                "Splat wire at {:?} {:?} for net {}",
+                pos,
+                router.detail_router.get_cell(pos),
+                net_idx,
+            );
+
+            while let GridCell::Occupied(d, id) = router
                 .detail_router
-                .get_cell(Position::new(x, y, z).try_into()?)
-                .context("Failed to get router cell in wire splat")?
+                .get_cell(pos)
+                .context("Wire splat backtrack")?
             {
-                GridCell::Free => {}
-                GridCell::Blocked => {
-                    // *block = b_glass;
+                if id.0 != net_idx {
+                    break;
                 }
-                GridCell::Occupied(d, net) => {
-                    if y != 0 {
-                        continue;
-                    }
-                    if (*d == Direction::North || *d == Direction::South) && x % 2 == 0 {
-                        *block = b_wools[(net.0 as usize) % b_wools.len()];
-                    }
-                    if (*d == Direction::East || *d == Direction::West) && z % 2 == 0 {
-                        *block = b_wools[(net.0 as usize) % b_wools.len()];
-                    }
-                }
-                GridCell::Claimed(net) => {
-                    *block = b_wools[(net.0 as usize) % b_wools.len()];
-                }
+                let d = *d;
+                let tier = pos.y as u32 / LAYERS_PER_TIER;
+                let layer = Layer::from_compact_idx(pos.y % LAYERS_PER_TIER as i32)?;
+                let wire_pos = (WireTierLayer::new(tier, layer), prev_direction);
+                splat_wire_segment(
+                    output,
+                    LayerPosition::new(pos.x, pos.z),
+                    wire_pos,
+                    (wire_pos.0, d),
+                )?;
+
+                prev_direction = d;
+                pos = pos.offset(d);
             }
         }
     }
@@ -624,11 +635,7 @@ fn main() -> Result<()> {
 
     structure_cache.build_palette_maps(&mut output_structure)?;
 
-    do_splat(
-        &placed_design,
-        &structure_cache,
-        &mut output_structure,
-    )?;
+    do_splat(&placed_design, &structure_cache, &mut output_structure)?;
 
     do_route(&config, &netlist, &mut output_structure)?;
 

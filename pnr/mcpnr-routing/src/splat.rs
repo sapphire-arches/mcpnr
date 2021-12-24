@@ -65,6 +65,17 @@ impl<'a> Splatter<'a> {
                     ),
                 },
             ),
+            (
+                "sign_z+",
+                Block {
+                    name: "minecraft:oak_sign".to_owned(),
+                    properties: Some(
+                        [("rotation".to_owned(), PropertyValue::Byte(8))]
+                            .into_iter()
+                            .collect(),
+                    ),
+                },
+            ),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_owned(), o.add_new_block_type(v)))
@@ -259,7 +270,7 @@ impl<'a> Splatter<'a> {
         let b_air = self.get_common_block("air")?;
         let b_calcite = self.get_common_block("calcite")?;
         let b_switch = self.get_common_block("switch")?;
-        let z_sign = self.get_common_block("sign_z-")?;
+        let z_sign = self.get_common_block("sign_z+")?;
 
         for switch in 0..nswitches {
             let switch_x = (switch * 2) as u32 + base_x;

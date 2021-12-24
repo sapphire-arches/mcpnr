@@ -1,6 +1,7 @@
 use std::ops::{Add, Sub};
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
+use log::debug;
 use mcpnr_common::block_storage::{Block, BlockStorage};
 
 use crate::detail_routing::Position;
@@ -119,6 +120,8 @@ pub fn splat_wire_segment(
         input,
         output
     );
+
+    debug!("Splat wire at {:?} from {:?} -> {:?}", start_position, input, output);
 
     // TODO: cache these
     let b_air = o.add_new_block_type(Block::new("minecraft:air".into()));
