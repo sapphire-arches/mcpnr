@@ -6,7 +6,7 @@ mod structure_cache;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use detail_routing::wire_segment::{splat_wire_segment, LayerPosition, WireTierLayer};
-use detail_routing::{DetailRouter, GridCell, GridCellPosition, Layer, RoutingError, ALL_LAYERS};
+use detail_routing::{DetailRouter, GridCell, GridCellPosition, Layer, RoutingError};
 use log::{debug, error, info, warn};
 use mcpnr_common::block_storage::{
     Block, BlockStorage, Direction, Position, PropertyValue, ALL_DIRECTIONS, PLANAR_DIRECTIONS,
@@ -522,45 +522,6 @@ fn do_route(config: &Config, netlist: &Netlist, output: &mut BlockStorage) -> Re
 
     let mut router = Router::new(config, netlist, output)?;
     router.rnr_loop()?;
-
-    let b_wools = [
-        "minecraft:white_wool",
-        "minecraft:orange_wool",
-        "minecraft:magenta_wool",
-        "minecraft:light_blue_wool",
-        "minecraft:yellow_wool",
-        "minecraft:lime_wool",
-        "minecraft:pink_wool",
-        "minecraft:gray_wool",
-        "minecraft:light_gray_wool",
-        "minecraft:cyan_wool",
-        "minecraft:purple_wool",
-        "minecraft:blue_wool",
-        "minecraft:brown_wool",
-        "minecraft:green_wool",
-        "minecraft:red_wool",
-        "minecraft:black_wool",
-        "minecraft:white_terracotta",
-        "minecraft:orange_terracotta",
-        "minecraft:magenta_terracotta",
-        "minecraft:light_blue_terracotta",
-        "minecraft:yellow_terracotta",
-        "minecraft:lime_terracotta",
-        "minecraft:pink_terracotta",
-        "minecraft:gray_terracotta",
-        "minecraft:light_gray_terracotta",
-        "minecraft:cyan_terracotta",
-        "minecraft:purple_terracotta",
-        "minecraft:blue_terracotta",
-        "minecraft:brown_terracotta",
-        "minecraft:green_terracotta",
-        "minecraft:red_terracotta",
-        "minecraft:black_terracotta",
-    ]
-    .into_iter()
-    .map(|ty| output.add_new_block_type(Block::new(ty.into())))
-    .collect::<Vec<_>>();
-    // let b_glass = output.add_new_block_type(Block::new("minecraft:glass".into()));
 
     info!("Begin wire splats");
     for (net_idx, net) in netlist.iter_nets() {
