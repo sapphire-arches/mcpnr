@@ -1,8 +1,7 @@
 use crate::RouteId;
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use itertools::Itertools;
 use log::{debug, info};
-use mcpnr_common::block_storage::{Direction, Position, ALL_DIRECTIONS, PLANAR_DIRECTIONS};
+use mcpnr_common::block_storage::{Direction, Position, ALL_DIRECTIONS};
 use std::{collections::BinaryHeap, fmt::Display};
 
 use self::wire_segment::WireCoord;
@@ -584,7 +583,7 @@ impl DetailRouter {
 
     pub fn rip_up(&mut self, id: RouteId) -> Result<()> {
         // TODO: make this API more efficient?
-        for (i, cell) in self.grid.iter_mut().enumerate() {
+        for (_, cell) in self.grid.iter_mut().enumerate() {
             match cell {
                 GridCell::Occupied(_, i) if *i == id => *cell = GridCell::Free,
                 _ => {}
