@@ -12,7 +12,7 @@ module top ();
 
   MCPNR_LIGHTS #(
     .POS_X(0),
-    .POS_Y(8),
+    .POS_Y(7),
     .POS_Z(0),
     .NLIGHT(8),
   ) output_lights (
