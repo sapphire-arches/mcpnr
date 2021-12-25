@@ -596,22 +596,24 @@ impl DetailRouter {
 
     fn debug_dump(&self) {
         for y in 0..self.current_bounds_max.y {
+            let min_x = std::cmp::max(self.current_bounds_min.x - 2, 0.into());
+            let min_z = std::cmp::max(self.current_bounds_min.z - 2, 0.into());
             {
                 let mut bufz = String::new();
 
-                for z in 0..self.current_bounds_max.z.0 {
+                for z in min_z.0..self.current_bounds_max.z.0 {
                     bufz.push_str(&format!("{:4} ", z))
                 }
-                for z in 0..self.current_bounds_max.z.0 {
+                for z in min_z.0..self.current_bounds_max.z.0 {
                     bufz.push_str(&format!("{:3} ", z))
                 }
                 debug!(" -- y {} {}", y, bufz);
             }
 
-            for x in 0..self.current_bounds_max.x.0 {
+            for x in min_x.0..self.current_bounds_max.x.0 {
                 let mut buf_s = String::new();
                 let mut buf_c = String::new();
-                for z in 0..self.current_bounds_max.z.0 {
+                for z in min_z.0..self.current_bounds_max.z.0 {
                     let pos = GridCellPosition::new(WireCoord(x), y, WireCoord(z));
                     let idx = self.pos_to_idx(pos).unwrap();
                     let score = self.score_grid[idx];
