@@ -494,7 +494,10 @@ impl<'nets> Router<'nets> {
                 Ok(_) => {}
                 Err(e) => {
                     if let Some(RoutingError::Unroutable) = e.downcast_ref() {
-                        warn!("Failed to route net {:?} {:?}", driver, sink);
+                        warn!("Failed to route net {:?} -> {:?}", driver, sink);
+                        for e in e.chain() {
+                            warn!("  because ... {}", e);
+                        }
                         this_net_all_routed = false;
                         continue;
                     } else {
