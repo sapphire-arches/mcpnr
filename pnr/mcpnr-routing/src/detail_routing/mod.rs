@@ -167,13 +167,6 @@ pub const ALL_LAYERS: [Layer; 5] = [Layer::LI, Layer::M0, Layer::M1, Layer::M2, 
 
 pub const LAYERS_PER_TIER: u32 = ALL_LAYERS.len() as u32;
 
-#[derive(Debug, PartialEq, Eq)]
-enum StepDirection {
-    StepUp,
-    StepDown,
-    NoStep,
-}
-
 pub struct DetailRouter {
     size_x: i32,
     size_y: i32,
@@ -219,8 +212,8 @@ impl DetailRouter {
 
     pub fn route(
         &mut self,
-        start: GridCellPosition,
-        end: GridCellPosition,
+        driver: GridCellPosition,
+        sink: GridCellPosition,
         id: RouteId,
     ) -> Result<()> {
         // TODO: implement A* by adding an estimate to this
@@ -230,7 +223,7 @@ impl DetailRouter {
             // TODO: Use routing grid indicies instead of positions
             pos: GridCellPosition,
 
-            direction_entry: Direction,
+            sink_direction: Direction,
         }
 
         impl PartialOrd for RouteQueueItem {
@@ -251,9 +244,10 @@ impl DetailRouter {
             }
         }
 
-        log::info!("Begin routing net {:?} from {} to {}", id, start, end);
+        log::info!("Begin routing net {:?} from {} to {}", id, driver, sink);
 
-        let start_direction = if let GridCell::Occupied(d, gid) = self.get_cell(start)? {
+        // Direction in to the driver
+        let driver_direction = if let GridCell::Occupied(d, gid) = self.get_cell(driver)? {
             ensure!(
                 *gid == id,
                 "Pin start is occupied by a net with non-matching {:?} (should be {:?})",
@@ -263,12 +257,13 @@ impl DetailRouter {
             *d
         } else {
             bail!(
-                "Pin start is not occupied, it is instead {:?}",
-                self.get_cell(start)?
+                "Driver pin is not occupied, it is instead {:?}",
+                self.get_cell(driver)?
             );
         };
 
-        let end_direction = if let GridCell::Occupied(d, gid) = self.get_cell(end)? {
+        // Direction the sink wants to leave in
+        let sink_direction = if let GridCell::Occupied(d, gid) = self.get_cell(sink)? {
             ensure!(
                 *gid == id,
                 "Pin end is occupied by a net with non-matching {:?} (should be {:?})",
@@ -279,7 +274,7 @@ impl DetailRouter {
         } else {
             bail!(
                 "Pin end is not occupied, it is instead {:?}",
-                self.get_cell(end)?
+                self.get_cell(sink)?
             );
         };
 
@@ -291,45 +286,49 @@ impl DetailRouter {
         }
 
         self.current_bounds_min = GridCellPosition::new(
-            std::cmp::max(std::cmp::min(start.x, end.x) - 2, WireCoord(0)),
-            std::cmp::max(std::cmp::min(start.y, end.y) - 2, 0),
-            std::cmp::max(std::cmp::min(start.z, end.z) - 2, WireCoord(0)),
+            std::cmp::max(std::cmp::min(driver.x, sink.x) - 2, WireCoord(0)),
+            std::cmp::max(std::cmp::min(driver.y, sink.y) - 2, 0),
+            std::cmp::max(std::cmp::min(driver.z, sink.z) - 2, WireCoord(0)),
         );
         self.current_bounds_max = GridCellPosition::new(
-            std::cmp::max(start.x, end.x) + 2,
-            std::cmp::max(start.y, end.y) + 2,
-            std::cmp::max(start.z, end.z) + 2,
+            std::cmp::max(driver.x, sink.x) + 2,
+            std::cmp::max(driver.y, sink.y) + 2,
+            std::cmp::max(driver.z, sink.z) + 2,
         );
 
-        let start = start.offset(start_direction.mirror());
-        let end = end.offset(end_direction);
+        // Start the driver one cell away in the direction that will cause entry into the driver
+        let driver = driver.offset(driver_direction.mirror());
+        // Start the sink one cell away in the direction the pin requests.
+        let sink = sink.offset(sink_direction);
 
-        match self.get_cell(start)? {
+        match self.get_cell(driver)? {
             GridCell::Free => {}
             GridCell::Blocked => {
+                self.debug_dump();
                 return Err(RoutingError::Unroutable)
-                    .context("Start pin points directly at an unroutable cell")
+                    .context("Driver pin points directly at an unroutable cell");
             }
             GridCell::Occupied(_, i) => {
                 if *i != id {
                     return Err(RoutingError::Unroutable).context(anyhow!(
-                        "Start pin points directly at a cell already occupied by route {:?}",
+                        "Driver pin points directly at a cell already occupied by route {:?}",
                         id
                     ));
                 }
             }
         };
 
-        match self.get_cell(start)? {
+        match self.get_cell(driver)? {
             GridCell::Free => {}
             GridCell::Blocked => {
+                self.debug_dump();
                 return Err(RoutingError::Unroutable)
-                    .context("End pin points directly at an unroutable cell")
+                    .context("Sink pin points directly at an unroutable cell");
             }
             GridCell::Occupied(_, i) => {
                 if *i != id {
                     return Err(RoutingError::Unroutable).context(anyhow!(
-                        "End pin points directly at a cell already occupied by route {:?}",
+                        "Sink pin points directly at a cell already occupied by route {:?}",
                         id
                     ));
                 }
@@ -338,11 +337,12 @@ impl DetailRouter {
 
         let mut routing_queue = BinaryHeap::new();
 
-        // Routing should start at the cell specified by the direction of the pin
+        // Start at the sink and iterate until we either bottom out (explored everything and found
+        // no route) or we find our way to something already owned by our net.
         routing_queue.push(RouteQueueItem {
             cost: 0,
-            pos: start,
-            direction_entry: start_direction.mirror(),
+            pos: sink,
+            sink_direction,
         });
 
         while let Some(item) = routing_queue.pop() {
@@ -356,148 +356,124 @@ impl DetailRouter {
             }
 
             self.score_grid[idx] = item.cost;
+            let item_grid = self.grid[idx];
 
-            if item.pos == end {
-                return self.do_backtrack(end, end_direction, start, start_direction, id);
-            } else {
-                self.for_each_neighbor(
-                    item.pos,
-                    item.direction_entry,
-                    id,
-                    |neighbor, direction, is_step| {
-                        // Skip neighbors that leave the bounds of what we care about
-                        if !self.is_in_bounds(neighbor) {
-                            debug!("Skipping {} because it leaves bounding box", neighbor);
-                            return Ok(());
-                        }
-                        let idx = self
-                            .pos_to_idx(neighbor)
-                            .context("Failed to get index of new neighbor")?;
-                        let grid = self.grid[idx];
-                        let cost = item.cost
-                            + match grid {
-                                GridCell::Free => 100,
-                                GridCell::Blocked => 10_000_000,
-                                GridCell::Occupied(_, nid) => {
-                                    if id == nid {
-                                        50
-                                    } else {
-                                        // Skip this cell because we can't route through it, but don't error
-                                        debug!(
-                                            "Skipping {} because it's blocked by {:?}",
-                                            neighbor, grid
-                                        );
-                                        return Ok(());
-                                    }
+            if let GridCell::Occupied(_, occupied_id) = item_grid {
+                if occupied_id == id {
+                    return self.do_backtrack(sink, item.pos, item.sink_direction, id);
+                }
+            }
+            self.for_each_neighbor(
+                item.pos,
+                item.sink_direction,
+                id,
+                |neighbor, move_direction| -> Result<()> {
+                    // Skip neighbors that leave the bounds of what we care about
+                    if !self.is_in_bounds(neighbor) {
+                        debug!("Skipping {} because it leaves bounding box", neighbor);
+                        return Ok(());
+                    }
+                    let idx = self
+                        .pos_to_idx(neighbor)
+                        .context("Failed to get index of new neighbor")?;
+                    let grid = self.grid[idx];
+                    let cost = item.cost
+                        + match grid {
+                            GridCell::Free => 100,
+                            GridCell::Blocked => 10_000_000,
+                            GridCell::Occupied(_, nid) => {
+                                if id == nid {
+                                    25
+                                } else {
+                                    // Skip this cell because we can't route through it, but don't error
+                                    debug!(
+                                        "Skipping {} because it's blocked by {:?}",
+                                        neighbor, grid
+                                    );
+                                    return Ok(());
                                 }
                             }
-                            + match direction {
-                                Direction::Up | Direction::Down => 1000,
-                                _ => 0,
-                            };
-                        if cost < self.score_grid[idx] {
-                            debug!("Pushing item for {} (cost: {})", neighbor, cost);
-                            routing_queue.push(RouteQueueItem {
-                                cost,
-                                pos: neighbor,
-                                direction_entry: direction,
-                            })
                         }
+                        + match move_direction {
+                            Direction::Up | Direction::Down => 1000,
+                            _ => 0,
+                        };
+                    if cost < self.score_grid[idx] {
+                        debug!("Pushing item for {} (cost: {})", neighbor, cost);
+                        routing_queue.push(RouteQueueItem {
+                            cost,
+                            pos: neighbor,
+                            sink_direction: move_direction.mirror(),
+                        })
+                    }
 
-                        Ok(())
-                    },
-                )
-                .context("Forward search neighbors")?
-            }
+                    Ok(())
+                },
+            )
+            .context("Forward search neighbors")?
         }
 
-        debug!("Failed to route net {:?} from {:?} to {:?}", id, start, end);
+        debug!(
+            "Failed to route net {:?} from {:?} to {:?}",
+            id, driver, sink
+        );
         self.debug_dump();
         Err(RoutingError::Unroutable)?
     }
 
     fn do_backtrack(
         &mut self,
-        end: GridCellPosition,
-        end_direction: Direction,
-        start: GridCellPosition,
+        sink: GridCellPosition,
+        first_net_touch: GridCellPosition,
         start_direction: Direction,
         id: RouteId,
     ) -> Result<()> {
         debug!("Begin backtrack");
-        // Start the backtrack offset by the
-        let mut backtrack_pos = end;
-        let mut min_pos = backtrack_pos;
-        let mut min_direction = end_direction;
-        let mut min_step = StepDirection::NoStep;
-        let mut last_backtrack_pos = GridCellPosition::new(WireCoord(0), 0, WireCoord(0));
 
-        while backtrack_pos != start {
-            if backtrack_pos == last_backtrack_pos {
-                info!(
-                    "Bounds: {} {} for {:?}",
-                    self.current_bounds_min, self.current_bounds_max, id
-                );
-                self.debug_dump();
+        let mut min_direction = start_direction.mirror();
+        let mut min_position = first_net_touch;
+        let min_pos_idx = self.pos_to_idx(min_position)?;
+        let mut min_cost = self.score_grid[min_pos_idx];
+        let mut last_min_pos = min_position;
 
-                panic!("Backtrack did not make progress");
-            }
-
-            let backtrack_pos_idx = self
-                .pos_to_idx(backtrack_pos)
-                .context("Failed to get index for backtrack start")?;
-            debug!(
-                "Mark occupied {:?} (facing {:?})",
-                backtrack_pos, min_direction
-            );
-            // TODO: handle vias
-
-            let mut min = self.score_grid[backtrack_pos_idx];
+        while min_position != sink {
             self.for_each_neighbor(
-                backtrack_pos,
+                min_position,
                 min_direction,
                 id,
-                |neighbor, direction, step| {
-                    debug!("  Consider neighbor {}", neighbor);
-                    if !self.is_in_bounds(neighbor) {
-                        debug!(
-                            "  Discard neighbor {} because it is out of bounds",
-                            neighbor
-                        );
-                        return Ok(());
-                    }
-                    let idx = self
-                        .pos_to_idx(neighbor)
-                        .context("  Failed to get neighbor index during backtrack")?;
-                    let score = self.score_grid[idx];
-                    debug!("  Consider neighbor {:?} ({} vs {})", neighbor, score, min);
-                    if score < min {
-                        min = score;
-                        min_pos = neighbor;
-                        min_direction = direction;
-                        min_step = step;
-                    }
+                |neighbor, move_direction| -> Result<()> {
+                    let neighbor_idx = self.pos_to_idx(neighbor)?;
+                    if self.score_grid[neighbor_idx] < min_cost {
+                        min_cost = self.score_grid[neighbor_idx];
 
+                        min_position = neighbor;
+                        // Mirror the direction because the step taken here moves us *towards* the
+                        // sink, while we want to record the path *away* from the sink.
+                        min_direction = move_direction.mirror();
+                    }
                     Ok(())
                 },
-            )
-            .context("During backtrack neighbor search")?;
-            self.grid
-                .get_mut(backtrack_pos_idx)
-                .map(|v| *v = GridCell::Occupied(min_direction, id));
+            )?;
 
-            last_backtrack_pos = backtrack_pos;
-            backtrack_pos = min_pos;
+            let min_pos_idx = self.pos_to_idx(min_position)?;
+            self.grid[min_pos_idx] = GridCell::Occupied(min_direction, id);
+
+            if last_min_pos == min_position {
+                self.debug_dump();
+                return Err(RoutingError::Unroutable).context(anyhow!(
+                    "Backtrack for net {:?} did not make progress at {}",
+                    id,
+                    min_position
+                ));
+                // panic!(
+                //     "Backtrack for net {:?} did not make progress at {}",
+                //     id, min_position
+                // );
+            }
+            last_min_pos = min_position;
         }
 
-        let backtrack_pos_idx = self
-            .pos_to_idx(backtrack_pos)
-            .context("Failed to get index of final step in backtrack")?;
-        self.grid[backtrack_pos_idx] = GridCell::Occupied(start_direction, id);
-
-        self.debug_dump();
-
-        return Ok(());
+        Ok(())
     }
 
     #[inline]
@@ -552,17 +528,17 @@ impl DetailRouter {
     fn for_each_neighbor(
         &self,
         pos: GridCellPosition,
-        entry_direction: Direction,
+        sink_direction: Direction,
         id: RouteId,
-        mut f: impl FnMut(GridCellPosition, Direction, StepDirection) -> Result<()>,
+        mut f: impl FnMut(GridCellPosition, Direction) -> Result<()>,
     ) -> Result<()> {
-        let illegal_direction = entry_direction.mirror();
+        let illegal_direction = sink_direction;
         for d in ALL_DIRECTIONS {
             let neighbor = pos.offset(d);
             if d == illegal_direction {
                 // Can't double back
                 debug!(
-                    "Skipping neighbors like {} because it would require a direction mirror",
+                    "Skipping neighbors like {} because it would move closer to the sink",
                     neighbor
                 );
                 continue;
@@ -575,7 +551,7 @@ impl DetailRouter {
                 );
                 continue;
             }
-            f(neighbor, d, StepDirection::NoStep).context("in-plane direction")?;
+            f(neighbor, d).context("in-plane direction")?;
         }
 
         Ok(())
