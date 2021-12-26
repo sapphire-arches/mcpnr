@@ -464,7 +464,7 @@ impl<'nets> Router<'nets> {
         *(self
             .detail_router
             .get_cell_mut(start)
-            .context("Get start cell")?) = GridCell::Occupied(*start_direction, RouteId(net_idx));
+            .context("Get start cell")?) = GridCell::Blocked;
 
         let mut this_net_all_routed = true;
 
@@ -488,9 +488,15 @@ impl<'nets> Router<'nets> {
             *(self
                 .detail_router
                 .get_cell_mut(end)
-                .context("Get end cell")?) = GridCell::Occupied(*end_direction, RouteId(net_idx));
+                .context("Get end cell")?) = GridCell::Blocked;
 
-            match self.detail_router.route(start, end, RouteId(net_idx)) {
+            match self.detail_router.route(
+                start,
+                *start_direction,
+                end,
+                *end_direction,
+                RouteId(net_idx),
+            ) {
                 Ok(_) => {}
                 Err(e) => {
                     if let Some(RoutingError::Unroutable) = e.downcast_ref() {

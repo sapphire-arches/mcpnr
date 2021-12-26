@@ -11,10 +11,14 @@ fn assert_connected(
     router: &DetailRouter,
     driver: GridCellPosition,
     sink: GridCellPosition,
+    sink_direction: Direction,
     route: RouteId,
 ) -> Result<Vec<GridCellPosition>> {
+    info!("Post-route debug dump");
+    router.debug_dump();
+
     let mut pathway = Vec::new();
-    let mut pos = sink;
+    let mut pos = sink.offset(sink_direction);
     while pos != driver {
         ensure!(
             !pathway.contains(&pos),
@@ -32,21 +36,20 @@ fn assert_connected(
         }
     }
 
-    info!("Post-route debug dump");
-    router.debug_dump();
-
     Ok(pathway)
 }
 
 fn test_routing_and_suffixes(
     router: &mut DetailRouter,
     driver: GridCellPosition,
+    driver_direction: Direction,
     sink: GridCellPosition,
+    sink_direction: Direction,
     route: RouteId,
 ) -> Result<()> {
-    router.route(driver, sink, route)?;
+    router.route(driver, driver_direction, sink, sink_direction, route)?;
 
-    let pathway = assert_connected(router, driver, sink, route)?;
+    let pathway = assert_connected(router, driver, sink, sink_direction, route)?;
 
     info!("Testing removal along pathway {:?}", pathway);
 
@@ -58,9 +61,9 @@ fn test_routing_and_suffixes(
         info!("Pre-route debug dump");
         router.debug_dump();
 
-        router.route(driver, sink, route)?;
+        router.route(driver, driver_direction, sink, sink_direction, route)?;
 
-        let _ = assert_connected(router, driver, sink, route)?;
+        let _ = assert_connected(router, driver, sink, sink_direction, route)?;
     }
 
     Ok(())
@@ -70,41 +73,49 @@ fn test_routing_and_suffixes(
 pub fn it_can_route_straight_lines() -> Result<()> {
     let mut router = init(5, 5, 5);
 
-    let drivers: [(GridCellPosition, GridCell); 4] = [
+    let drivers: [(GridCellPosition, Direction, RouteId); 4] = [
         (
             GridCellPosition::new(0.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::North, RouteId(0)),
+            Direction::North,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(0.into(), 0, 4.into()),
-            GridCell::Occupied(Direction::South, RouteId(0)),
+            Direction::South,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(0.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::West, RouteId(0)),
+            Direction::West,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(4.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::East, RouteId(0)),
+            Direction::East,
+            RouteId(0),
         ),
     ];
 
-    let sinks: [(GridCellPosition, GridCell); 4] = [
+    let sinks: [(GridCellPosition, Direction, RouteId); 4] = [
         (
             GridCellPosition::new(0.into(), 0, 4.into()),
-            GridCell::Occupied(Direction::North, RouteId(0)),
+            Direction::North,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(0.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::South, RouteId(0)),
+            Direction::South,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(4.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::West, RouteId(0)),
+            Direction::West,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(0.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::East, RouteId(0)),
+            Direction::East,
+            RouteId(0),
         ),
     ];
 
@@ -114,10 +125,10 @@ pub fn it_can_route_straight_lines() -> Result<()> {
         let driver = drivers[i];
         let sink = sinks[i];
 
-        *router.get_cell_mut(driver.0)? = driver.1;
-        *router.get_cell_mut(sink.0)? = sink.1;
+        *router.get_cell_mut(driver.0)? = GridCell::Blocked;
+        *router.get_cell_mut(sink.0)? = GridCell::Blocked;
 
-        test_routing_and_suffixes(&mut router, driver.0, sink.0, RouteId(0))?;
+        test_routing_and_suffixes(&mut router, driver.0, driver.1, sink.0, sink.1, RouteId(0))?;
     }
 
     Ok(())
@@ -127,41 +138,49 @@ pub fn it_can_route_straight_lines() -> Result<()> {
 pub fn it_can_route_across_layers() -> Result<()> {
     let mut router = init(5, 5, 5);
 
-    let drivers: [(GridCellPosition, GridCell); 4] = [
+    let drivers: [(GridCellPosition, Direction, RouteId); 4] = [
         (
             GridCellPosition::new(0.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::North, RouteId(0)),
+            Direction::North,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(0.into(), 0, 4.into()),
-            GridCell::Occupied(Direction::South, RouteId(0)),
+            Direction::South,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(0.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::West, RouteId(0)),
+            Direction::West,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(4.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::East, RouteId(0)),
+            Direction::East,
+            RouteId(0),
         ),
     ];
 
-    let sinks: [(GridCellPosition, GridCell); 4] = [
+    let sinks: [(GridCellPosition, Direction, RouteId); 4] = [
         (
             GridCellPosition::new(0.into(), 0, 4.into()),
-            GridCell::Occupied(Direction::North, RouteId(0)),
+            Direction::North,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(0.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::South, RouteId(0)),
+            Direction::South,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(4.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::West, RouteId(0)),
+            Direction::West,
+            RouteId(0),
         ),
         (
             GridCellPosition::new(0.into(), 0, 0.into()),
-            GridCell::Occupied(Direction::East, RouteId(0)),
+            Direction::East,
+            RouteId(0),
         ),
     ];
 
@@ -188,10 +207,10 @@ pub fn it_can_route_across_layers() -> Result<()> {
         let driver = drivers[i];
         let sink = sinks[i];
 
-        *router.get_cell_mut(driver.0)? = driver.1;
-        *router.get_cell_mut(sink.0)? = sink.1;
+        *router.get_cell_mut(driver.0)? = GridCell::Blocked;
+        *router.get_cell_mut(sink.0)? = GridCell::Blocked;
 
-        test_routing_and_suffixes(&mut router, driver.0, sink.0, RouteId(0))?;
+        test_routing_and_suffixes(&mut router, driver.0, driver.1, sink.0, sink.1, RouteId(0))?;
     }
 
     Ok(())

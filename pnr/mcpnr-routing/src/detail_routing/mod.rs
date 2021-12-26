@@ -213,7 +213,9 @@ impl DetailRouter {
     pub fn route(
         &mut self,
         driver: GridCellPosition,
+        driver_direction: Direction,
         sink: GridCellPosition,
+        sink_direction: Direction,
         id: RouteId,
     ) -> Result<()> {
         // TODO: implement A* by adding an estimate to this
@@ -246,40 +248,6 @@ impl DetailRouter {
 
         log::info!("Begin routing net {:?} from {} to {}", id, driver, sink);
 
-        // Direction in to the driver
-        let driver_direction = if let GridCell::Occupied(d, gid) = self.get_cell(driver)? {
-            ensure!(
-                *gid == id,
-                "Pin start is occupied by a net with non-matching {:?} (should be {:?})",
-                gid,
-                id
-            );
-            *d
-        } else {
-            bail!(
-                "Driver pin is not occupied, it is instead {:?}",
-                self.get_cell(driver)?
-            );
-        };
-
-        // Direction the sink wants to leave in
-        let sink_direction = if let GridCell::Occupied(d, gid) = self.get_cell(sink)? {
-            ensure!(
-                *gid == id,
-                "Pin end is occupied by a net with non-matching {:?} (should be {:?})",
-                gid,
-                id
-            );
-            *d
-        } else {
-            bail!(
-                "Pin end is not occupied, it is instead {:?}",
-                self.get_cell(sink)?
-            );
-        };
-
-        // TODO: use some sort of inline marker to avoid needing to clear the full grid on every
-        // pass
         // TODO: Use temporary just-right-sized routing grid instead of the full one
         for score in self.score_grid.iter_mut() {
             *score = std::u32::MAX;
