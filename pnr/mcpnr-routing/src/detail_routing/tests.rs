@@ -54,7 +54,7 @@ fn test_routing_and_suffixes(
     info!("Testing removal along pathway {:?}", pathway);
 
     for i in 2..pathway.len() {
-        for j in 1..i {
+        for j in 0..i {
             *router.get_cell_mut(pathway[j])? = GridCell::Free;
         }
 
