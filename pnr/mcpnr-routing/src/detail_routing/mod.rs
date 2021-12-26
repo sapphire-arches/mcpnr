@@ -259,9 +259,9 @@ impl DetailRouter {
             std::cmp::max(std::cmp::min(driver.z, sink.z) - 2, WireCoord(0)),
         );
         self.current_bounds_max = GridCellPosition::new(
-            std::cmp::max(driver.x, sink.x) + 2,
-            std::cmp::max(driver.y, sink.y) + 2,
-            std::cmp::max(driver.z, sink.z) + 2,
+            std::cmp::min(std::cmp::max(driver.x, sink.x) + 2, self.size_x.into()),
+            std::cmp::min(std::cmp::max(driver.y, sink.y) + 2, self.size_y),
+            std::cmp::min(std::cmp::max(driver.z, sink.z) + 2, self.size_z.into()),
         );
 
         // Start the driver one cell away in the direction that will cause entry into the driver
