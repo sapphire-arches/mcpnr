@@ -393,7 +393,7 @@ impl DetailRouter {
 
         debug!(
             "Failed to route net {:?} from {:?} to {:?}",
-            id, driver, sink
+            id, sink, driver
         );
         self.debug_dump();
         Err(RoutingError::Unroutable)?
