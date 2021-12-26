@@ -485,12 +485,22 @@ impl DetailRouter {
         }
     }
 
-    fn is_blocked(&self, pos: GridCellPosition, id: RouteId, illegal_direction: Direction) -> bool {
+    fn is_blocked(&self, pos: GridCellPosition, id: RouteId) -> bool {
         match self.get_cell(pos) {
             Ok(cell) => match cell {
                 GridCell::Free => false,
-                GridCell::Blocked => true,
-                GridCell::Occupied(d, s) => *d == illegal_direction || s != &id,
+                GridCell::Blocked => {
+                    debug!("Cell {} is directly blocked", pos);
+                    true
+                }
+                GridCell::Occupied(_, s) => {
+                    if s != &id {
+                        debug!("Cell {} is allready occupied by net {:?}", pos, s);
+                        true
+                    } else {
+                        false
+                    }
+                }
             },
             Err(_) => true,
         }
@@ -514,7 +524,7 @@ impl DetailRouter {
                 );
                 continue;
             }
-            if self.is_blocked(neighbor, id, illegal_direction) {
+            if self.is_blocked(neighbor, id) {
                 // No possible move in this direction
                 debug!(
                     "Skipping neighbors like {} because they are blocked",
