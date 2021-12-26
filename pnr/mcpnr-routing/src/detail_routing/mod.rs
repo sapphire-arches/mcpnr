@@ -269,6 +269,13 @@ impl DetailRouter {
         // Start the sink one cell away in the direction the pin requests.
         let sink = sink.offset(sink_direction);
 
+        // Immediately mark the driver position as occupied and facing in the appropriate
+        // direction. This helps terminate the search early, and someone needs to do it so it may
+        // as well be us.
+        *self
+            .get_cell_mut(driver)
+            .context("Driver pin offset mark")? = GridCell::Occupied(driver_direction, id);
+
         match self.get_cell(driver)? {
             GridCell::Free => {}
             GridCell::Blocked => {
