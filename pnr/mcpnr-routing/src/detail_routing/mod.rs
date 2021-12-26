@@ -225,7 +225,7 @@ impl DetailRouter {
             // TODO: Use routing grid indicies instead of positions
             pos: GridCellPosition,
 
-            sink_direction: Direction,
+            illegal_direction: Direction,
         }
 
         impl PartialOrd for RouteQueueItem {
@@ -307,10 +307,13 @@ impl DetailRouter {
 
         // Start at the sink and iterate until we either bottom out (explored everything and found
         // no route) or we find our way to something already owned by our net.
+        //
+        // We block movement back to the original sink because that's already marked and would
+        // cause an erronious early-out
         routing_queue.push(RouteQueueItem {
             cost: 0,
             pos: sink,
-            sink_direction,
+            illegal_direction: sink_direction.mirror(),
         });
 
         while let Some(item) = routing_queue.pop() {
@@ -328,12 +331,12 @@ impl DetailRouter {
 
             if let GridCell::Occupied(_, occupied_id) = item_grid {
                 if occupied_id == id {
-                    return self.do_backtrack(sink, item.pos, item.sink_direction, id);
+                    return self.do_backtrack(sink, item.pos, item.illegal_direction, id);
                 }
             }
             self.for_each_neighbor(
                 item.pos,
-                item.sink_direction,
+                item.illegal_direction,
                 id,
                 |neighbor, move_direction| -> Result<()> {
                     // Skip neighbors that leave the bounds of what we care about
@@ -371,7 +374,7 @@ impl DetailRouter {
                         routing_queue.push(RouteQueueItem {
                             cost,
                             pos: neighbor,
-                            sink_direction: move_direction.mirror(),
+                            illegal_direction: move_direction.mirror(),
                         })
                     }
 
