@@ -2,11 +2,6 @@
   description = "PnR for Minecraft";
 
   inputs = {
-    bt-yosys = {
-      url = "github:bobtwinkles/yosys/master";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.nix.follows = "nix";
-    };
     amulet = {
       url = "github:bobtwinkles/amulet-flake";
       inputs.flake-utils.follows = "flake-utils";
@@ -27,13 +22,13 @@
     };
   };
 
-  outputs = { self, nix, nixpkgs, amulet, mozilla-overlay, bt-yosys, flake-utils }:
+  outputs = { self, nixpkgs, amulet, mozilla-overlay, flake-utils }:
     {
       mcpnr-rust-overlay = final: prev:
         let
           rustChannel = prev.rustChannelOf {
             channel = "stable";
-            sha256 = "sha256-6PfBjfCI9DaNRyGigEmuUP2pcamWsWGc4g7SNEHqD2c=";
+            sha256 = "sha256-4IUZZWXHBBxcwRuQm9ekOwzc0oNqH/9NkI1ejW7KajU=";
           };
           rust = rustChannel.rust.override {
             extensions = [
@@ -71,7 +66,6 @@
             overlays = [
               (import mozilla-overlay)
 
-              bt-yosys.outputs.overlay
               amulet.overlay
               self.mcpnr-rust-overlay
               self.overlay
@@ -85,15 +79,10 @@
 
           devShell =
             let pythonPackage = pkgs.python37.withPackages (pythonPackages: [
-              # For some reason we need to list all of these explicitly, I'm
-              # probaly doing something wrong in the amulet flake.
-              pythonPackages.numpy
               # xdot needs to be here or it chooses its own python version
               # (3.9) and then numpy explodes horribly because we installed the
               # numpy built against 3.7
               pythonPackages.xdot
-              pkgs.pymctranslate
-              pkgs.amulet-nbt
               pkgs.amulet-core
             ]);
             in
@@ -127,7 +116,7 @@
                 # Need to expose the icon data directory so xdot can find icons
                 XDG_DATA_DIRS=$GSETTINGS_SCHEMAS_PATH:${pkgs.gnome.adwaita-icon-theme}/share
 
-                export YOSYS_PROTO_PATH=${pkgs.yosys-proto}
+                export YOSYS_PROTO_PATH=${pkgs.yosys.src}/misc/yosys.proto
                 RUST_SRC_PATH=${pkgs.mcpnr-rust-platform.rustLibSrc}
               '';
             };
