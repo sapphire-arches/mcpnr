@@ -22,7 +22,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, amulet, mozilla-overlay, flake-utils }:
+  outputs = { self, nix, nixpkgs, amulet, mozilla-overlay, flake-utils }:
     {
       mcpnr-rust-overlay = final: prev:
         let
