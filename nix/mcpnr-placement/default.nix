@@ -1,4 +1,8 @@
-{ pkgs, mcpnr-rust-platform }:
+{ pkgs
+, mcpnr-rust-platform
+, xorg
+, vulkan-loader
+}:
 mcpnr-rust-platform.buildRustPackage rec {
   pname = "mcpnr-placement";
   version = "0.1.0";
@@ -10,6 +14,17 @@ mcpnr-rust-platform.buildRustPackage rec {
 
   YOSYS_PROTO_PATH = "${pkgs.yosys-proto}";
 
+  #TODO: For packaging, we need to wrap the program to set LD_LIBRARY_PATH
+
   nativeBuildInputs = [ pkgs.protobuf ];
-  buildInputs = [ ];
+
+  buildInputs = [
+    xorg.libX11
+    xorg.libXcursor
+    xorg.libXrandr
+    xorg.libXi
+    xorg.libxcb
+    xorg.libXrender
+    vulkan-loader
+  ];
 }

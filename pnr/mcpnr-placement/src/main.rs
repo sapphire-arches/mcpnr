@@ -1,13 +1,14 @@
 use anyhow::{anyhow, Context, Result};
+use clap::{Arg, Command};
 use itertools::Itertools;
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::{PlacedDesign, Position};
 use mcpnr_common::protos::yosys::pb::parameter::Value as YPValue;
 use mcpnr_common::protos::yosys::pb::{Design, Parameter};
 use placement_cell::{CellFactory, PlacementCell};
-use std::collections::HashMap;
 use std::path::PathBuf;
 
+mod gui;
 mod placement_cell;
 
 #[derive(Clone, Debug)]
@@ -19,61 +20,62 @@ struct Config {
     size_z: u32,
 }
 
-fn parse_args() -> Result<Config> {
-    use clap::{App, Arg};
-    let matches = App::new("MCPNR Placer")
-        .version(env!("CARGO_PKG_VERSION"))
-        .author(env!("CARGO_PKG_AUTHORS"))
-        .about("Placement phase for the MCPNR flow")
+impl Config {
+    fn from_args(matches: &clap::ArgMatches) -> Result<Self> {
+        let techlib_directory = PathBuf::from(matches.value_of_os("TECHLIB").unwrap());
+        Ok(Config {
+            input_file: PathBuf::from(matches.value_of_os("INPUT").unwrap()),
+            output_file: PathBuf::from(matches.value_of_os("OUTPUT").unwrap()),
+            structure_directory: techlib_directory.join("structures"),
+            size_x: matches
+                .value_of("SIZE_X")
+                .unwrap()
+                .parse()
+                .context("Parse SIZE_X")?,
+            size_z: matches
+                .value_of("SIZE_Z")
+                .unwrap()
+                .parse()
+                .context("Parse SIZE_Z")?,
+        })
+    }
+}
+
+fn add_common_args<'help>(command: Command<'help>) -> Command<'help> {
+    command
         .arg(
-            Arg::with_name("TECHLIB")
+            Arg::new("TECHLIB")
                 .long("techlib")
                 .value_name("TECHLIB")
+                .allow_invalid_utf8(true)
                 .required(true),
         )
         .arg(
-            Arg::with_name("SIZE_X")
+            Arg::new("SIZE_X")
                 .long("size-x")
                 .value_name("SIZE_X")
                 .default_value("192"),
         )
         .arg(
-            Arg::with_name("SIZE_Z")
+            Arg::new("SIZE_Z")
                 .long("size-z")
                 .value_name("SIZE_Z")
                 .default_value("192"),
         )
         .arg(
-            Arg::with_name("INPUT")
+            Arg::new("INPUT")
                 .help("Input design, as the output of a Yosys write_protobuf command")
                 .index(1)
+                .allow_invalid_utf8(true)
                 .required(true),
         )
         .arg(
-            Arg::with_name("OUTPUT")
+            Arg::new("OUTPUT")
                 .help("Output file location")
                 .index(2)
+                .allow_invalid_utf8(true)
                 .required(true),
         )
-        .get_matches();
-
-    let techlib_directory = PathBuf::from(matches.value_of_os("TECHLIB").unwrap());
-
-    Ok(Config {
-        input_file: PathBuf::from(matches.value_of_os("INPUT").unwrap()),
-        output_file: PathBuf::from(matches.value_of_os("OUTPUT").unwrap()),
-        structure_directory: techlib_directory.join("structures"),
-        size_x: matches
-            .value_of("SIZE_X")
-            .unwrap()
-            .parse()
-            .context("Parse SIZE_X")?,
-        size_z: matches
-            .value_of("SIZE_Z")
-            .unwrap()
-            .parse()
-            .context("Parse SIZE_Z")?,
-    })
 }
 
 fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
@@ -163,9 +165,7 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
     })
 }
 
-fn main() -> Result<()> {
-    let config = parse_args()?;
-
+fn run_placement(config: &Config) -> Result<()> {
     let design = {
         let inf = std::fs::read(&config.input_file)
             .with_context(|| anyhow!("Open input file {:?}", config.input_file))?;
@@ -188,4 +188,27 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn main() -> Result<()> {
+    let gui_command = add_common_args(Command::new("gui"))
+        .help("Run a GUI for interactive debugging of the placer");
+    let place_command = add_common_args(Command::new("place"))
+        .help("Run the placer in headless mode");
+    let matches = Command::new("mcpnr-placement")
+        .version(env!("CARGO_PKG_VERSION"))
+        .author(env!("CARGO_PKG_AUTHORS"))
+        .about("Placement phase for the MCPNR flow")
+        .subcommands(vec![gui_command, place_command])
+        .get_matches();
+
+    match matches.subcommand() {
+        Some(("gui", matches)) => {
+            gui::run_gui(&Config::from_args(matches).context("Building config from args")?)
+        }
+        Some(("place", matches)) => {
+            run_placement(&Config::from_args(matches).context("Building config from args")?)
+        }
+        e => panic!("Unhandled subcommand {:?}", e),
+    }
 }

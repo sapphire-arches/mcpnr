@@ -4,7 +4,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 pub const XZ_EXPANSION: u32 = 2;
 
-struct PlacementStructureData {
+pub(crate) struct PlacementStructureData {
     sx: u32,
     sy: u32,
     sz: u32,
@@ -46,7 +46,7 @@ impl CellFactory {
         }
     }
 
-    pub fn load_structure(&mut self, structure_name: &str) -> Result<&PlacementStructureData> {
+    pub(crate) fn load_structure(&mut self, structure_name: &str) -> Result<&PlacementStructureData> {
         if self.structure_cache.contains_key(structure_name) {
             self.structure_cache
                 .get(structure_name)

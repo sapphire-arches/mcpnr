@@ -78,13 +78,23 @@
           packages = mcpnrPackages;
 
           devShell =
-            let pythonPackage = pkgs.python37.withPackages (pythonPackages: [
-              # xdot needs to be here or it chooses its own python version
-              # (3.9) and then numpy explodes horribly because we installed the
-              # numpy built against 3.7
-              pythonPackages.xdot
-              pkgs.amulet-core
-            ]);
+            let
+              pythonPackage = pkgs.python37.withPackages (pythonPackages: [
+                # xdot needs to be here or it chooses its own python version
+                # (3.9) and then numpy explodes horribly because we installed the
+                # numpy built against 3.7
+                pythonPackages.xdot
+                pkgs.amulet-core
+              ]);
+              rust-gui-pkgs = with pkgs; [
+                xorg.libX11
+                xorg.libXcursor
+                xorg.libXrandr
+                xorg.libXi
+                xorg.libxcb
+                xorg.libXrender
+                vulkan-loader
+              ];
             in
             pkgs.mkShell {
               name = "mcpnr-devel-shell";
@@ -118,6 +128,9 @@
 
                 export YOSYS_PROTO_PATH=${pkgs.yosys.src}/misc/yosys.proto
                 RUST_SRC_PATH=${pkgs.mcpnr-rust-platform.rustLibSrc}
+
+                # Required for winit to find graphics libraries
+                LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath rust-gui-pkgs}/lib:$LD_LIBRARY_PATH
               '';
             };
 
