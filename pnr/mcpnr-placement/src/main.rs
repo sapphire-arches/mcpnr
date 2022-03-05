@@ -90,16 +90,13 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
 
     let mut cell_factory = CellFactory::new(config.structure_directory.clone());
 
-    let mut cells: HashMap<String, (PlacementCell, _)> = top_module
+    let mut cells: Vec<(PlacementCell, _)> = top_module
         .cell
         .into_iter()
         .map(|(key, cell)| -> Result<_> {
             Ok((
-                key,
-                (
-                    cell_factory.build_cell(&cell)?,
-                    (cell.attribute, cell.connection, cell.parameter, cell.r#type),
-                ),
+                cell_factory.build_cell(&cell)?,
+                (cell.attribute, cell.connection, cell.parameter, cell.r#type),
             ))
         })
         .try_collect()
@@ -111,7 +108,7 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
     let mut row_max_z = 0;
     let mut tier = 0;
 
-    for (_, (cell, _)) in cells.iter_mut() {
+    for (cell, _) in cells.iter_mut() {
         if cell.pos_locked {
             continue;
         }
@@ -138,7 +135,7 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
     // Convert intermediate placement cells to output format
     let cells = cells
         .into_iter()
-        .map(|(_, (cell, (attribute, connection, parameter, ty)))| {
+        .map(|(cell, (attribute, connection, parameter, ty))| {
             let pos = cell.unexpanded_pos();
             let mcpnr_cell = mcpnr_common::protos::mcpnr::placed_design::Cell {
                 attribute,
