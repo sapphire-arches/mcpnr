@@ -38,7 +38,7 @@ fn parse_args() -> Result<Config> {
     use clap::{App, Arg};
     let matches = App::new("MCPNR Placer")
         .version(env!("CARGO_PKG_VERSION"))
-        .author(clap::crate_authors!())
+        .author(env!("CARGO_PKG_AUTHORS"))
         .about("Placement phase for the MCPNR flow")
         .arg(
             Arg::with_name("TECHLIB")
