@@ -5,4 +5,6 @@ members = [
   "mcpnr-common",
   "mcpnr-placement",
   "mcpnr-routing",
+  "egui_wgpu_backend",
+  "egui_winit_platform",
 ]

@@ -130,7 +130,7 @@
                 RUST_SRC_PATH=${pkgs.mcpnr-rust-platform.rustLibSrc}
 
                 # Required for winit to find graphics libraries
-                LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath rust-gui-pkgs}/lib:$LD_LIBRARY_PATH
+                LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath rust-gui-pkgs}:$LD_LIBRARY_PATH
               '';
             };
 

@@ -191,6 +191,8 @@ fn run_placement(config: &Config) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
     let gui_command = add_common_args(Command::new("gui"))
         .help("Run a GUI for interactive debugging of the placer");
     let place_command = add_common_args(Command::new("place"))

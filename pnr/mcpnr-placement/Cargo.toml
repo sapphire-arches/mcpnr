@@ -6,8 +6,14 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 clap = "3.1.5"
+egui = "0.17.0"
+egui_wgpu_backend = { path = "../egui_wgpu_backend" }
+egui_winit_platform = { path = "../egui_winit_platform" }
+env_logger = "0.8.4"
 itertools = "0.10"
+log = "0.4"
 mcpnr-common = { path = "../mcpnr-common" }
+pollster = "0.2.5"
 quartz_nbt = { version = "0.2", features = [ "serde" ] }
 wgpu = "0.12.0"
 winit = "0.26.1"
