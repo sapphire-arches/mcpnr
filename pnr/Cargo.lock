@@ -460,7 +460,6 @@ version = "0.16.0"
 dependencies = [
  "bytemuck",
  "egui",
- "log",
  "wgpu",
 ]
 
