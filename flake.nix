@@ -14,47 +14,19 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:nixos/nixpkgs";
-    mozilla-overlay = {
-      type = "github";
-      owner = "mozilla";
-      repo = "nixpkgs-mozilla";
-      flake = false;
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, nix, nixpkgs, amulet, mozilla-overlay, flake-utils }:
+  outputs = { self, nix, nixpkgs, amulet, fenix, flake-utils }:
     {
-      mcpnr-rust-overlay = final: prev:
-        let
-          rustChannel = prev.rustChannelOf {
-            channel = "stable";
-            sha256 = "sha256-4IUZZWXHBBxcwRuQm9ekOwzc0oNqH/9NkI1ejW7KajU=";
-          };
-          rust = rustChannel.rust.override {
-            extensions = [
-              "rust-std"
-              "rust-src"
-            ];
-          };
-          src-ish = prev.stdenv.mkDerivation {
-            name = "rust-lib-ish-src";
-            src = rustChannel.rust-src;
-            phases = [ "unpackPhase" "installPhase" ];
-
-            installPhase = ''
-              mv lib/rustlib/src/rust $out
-            '';
-          };
-          mkPlatform = rustDrv: prev.makeRustPlatform {
-            rustc = rustDrv // { src = src-ish; };
-            cargo = rustDrv;
-          };
-        in
-        rec {
-          mcpnr-rust-platform = mkPlatform rustChannel.rust;
-        };
       overlay = final: prev: {
         mcpnr = prev.callPackage ./nix { };
+        mcpnr-rust-platform = (prev.makeRustPlatform {
+          inherit (fenix.packages.${prev.system}.stable) cargo rustc rust-src;
+        });
       };
     }
     //
@@ -64,10 +36,8 @@
           pkgs = import nixpkgs {
             inherit system;
             overlays = [
-              (import mozilla-overlay)
-
               amulet.overlay
-              self.mcpnr-rust-overlay
+              fenix.overlay
               self.overlay
             ];
           };
@@ -110,10 +80,13 @@
                 pythonPackage
 
                 # Rust development
-                mcpnr-rust-platform.rust.cargo
-                (rust-analyzer.override {
-                  rustPlatform = mcpnr-rust-platform;
-                })
+                (fenix.packages.${system}.stable.withComponents [
+                  "cargo"
+                  "rustc"
+                  "rust-src"
+                  "rustfmt"
+                ])
+                rust-analyzer-nightly
               ] ++ (pkgs.lib.concatMap (p: p.buildInputs) mcpnrPackagesList);
 
               nativeBuildInputs = with pkgs; [
@@ -127,7 +100,7 @@
                 XDG_DATA_DIRS=$GSETTINGS_SCHEMAS_PATH:${pkgs.gnome.adwaita-icon-theme}/share
 
                 export YOSYS_PROTO_PATH=${pkgs.yosys.src}/misc/yosys.proto
-                RUST_SRC_PATH=${pkgs.mcpnr-rust-platform.rustLibSrc}
+                # RUST_SRC_PATH=
 
                 # Required for winit to find graphics libraries
                 LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath rust-gui-pkgs}:$LD_LIBRARY_PATH
