@@ -5,6 +5,8 @@ members = [
   "mcpnr-common",
   "mcpnr-placement",
   "mcpnr-routing",
-  "egui_wgpu_backend",
-  "egui_winit_platform",
 ]
+
+[patch.crates-io]
+egui = { git = "https://github.com/emilk/egui", branch = "master" }
+eframe = { git = "https://github.com/emilk/egui", branch = "master" }

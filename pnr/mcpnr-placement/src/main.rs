@@ -191,12 +191,12 @@ fn run_placement(config: &Config) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    tracing_subscriber::fmt::init();
 
     let gui_command = add_common_args(Command::new("gui"))
         .help("Run a GUI for interactive debugging of the placer");
-    let place_command = add_common_args(Command::new("place"))
-        .help("Run the placer in headless mode");
+    let place_command =
+        add_common_args(Command::new("place")).help("Run the placer in headless mode");
     let matches = Command::new("mcpnr-placement")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -206,7 +206,8 @@ fn main() -> Result<()> {
 
     match matches.subcommand() {
         Some(("gui", matches)) => {
-            gui::run_gui(&Config::from_args(matches).context("Building config from args")?)
+            gui::run_gui(&Config::from_args(matches).context("Building config from args")?);
+            Ok(())
         }
         Some(("place", matches)) => {
             run_placement(&Config::from_args(matches).context("Building config from args")?)

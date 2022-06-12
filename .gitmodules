@@ -4,9 +4,3 @@
 [submodule "amulet-flake"]
 	path = amulet-flake
 	url = https://github.com/bobtwinkles/amulet-flake
-[submodule "pnr/egui_wgpu_backend"]
-	path = pnr/egui_wgpu_backend
-	url = https://github.com/bobtwinkles/egui_wgpu_backend
-[submodule "pnr/egui_winit_platform"]
-	path = pnr/egui_winit_platform
-	url = https://github.com/bobtwinkles/egui_winit_platform
