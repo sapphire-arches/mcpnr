@@ -100,7 +100,7 @@
                 XDG_DATA_DIRS=$GSETTINGS_SCHEMAS_PATH:${pkgs.gnome.adwaita-icon-theme}/share
 
                 export YOSYS_PROTO_PATH=${pkgs.yosys.src}/misc/yosys.proto
-                # RUST_SRC_PATH=
+                export RUST_SRC_PATH=${fenix.packages.${system}.stable.rust-src}/lib/rustlib/src/rust/library
 
                 # Required for winit to find graphics libraries
                 LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath rust-gui-pkgs}:$LD_LIBRARY_PATH
