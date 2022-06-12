@@ -8,6 +8,9 @@ use mcpnr_common::protos::yosys::pb::{Design, Parameter};
 use placement_cell::{CellFactory, PlacementCell};
 use std::path::PathBuf;
 
+use crate::core::PlaceableCells;
+
+mod core;
 mod gui;
 mod placement_cell;
 
@@ -92,17 +95,8 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
 
     let mut cell_factory = CellFactory::new(config.structure_directory.clone());
 
-    let mut cells: Vec<(PlacementCell, _)> = top_module
-        .cell
-        .into_iter()
-        .map(|(key, cell)| -> Result<_> {
-            Ok((
-                cell_factory.build_cell(&cell)?,
-                (cell.attribute, cell.connection, cell.parameter, cell.r#type),
-            ))
-        })
-        .try_collect()
-        .context("Failed to collect placement cells")?;
+    let mut cells = PlaceableCells::from_module(top_module, &mut cell_factory)
+        .with_context(|| "Extract cells")?;
 
     // TODO: smart place
     let mut cx = 0;
@@ -110,7 +104,7 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
     let mut row_max_z = 0;
     let mut tier = 0;
 
-    for (cell, _) in cells.iter_mut() {
+    for cell in cells.cells.iter_mut() {
         if cell.pos_locked {
             continue;
         }
@@ -134,35 +128,7 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
     }
     println!("Required tiers: {}", tier + 1);
 
-    // Convert intermediate placement cells to output format
-    let cells = cells
-        .into_iter()
-        .map(|(cell, (attribute, connection, parameter, ty))| {
-            let pos = cell.unexpanded_pos();
-            let mcpnr_cell = mcpnr_common::protos::mcpnr::placed_design::Cell {
-                attribute,
-                connection,
-                parameter,
-                pos: Some(Position {
-                    x: pos[0],
-                    y: pos[1],
-                    z: pos[2],
-                }),
-                r#type: ty,
-            };
-            mcpnr_cell
-        })
-        .collect();
-
-    Ok(PlacedDesign {
-        creator: format!(
-            "Placed by MCPNR {}, Synth: {}",
-            env!("CARGO_PKG_VERSION"),
-            design.creator,
-        ),
-        nets: top_module.netname,
-        cells,
-    })
+    Ok(cells.build_output(design.creator))
 }
 
 fn run_placement(config: &Config) -> Result<()> {
