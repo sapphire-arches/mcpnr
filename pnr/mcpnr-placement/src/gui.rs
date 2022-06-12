@@ -1,5 +1,13 @@
+use std::{any::Any, sync::Arc};
+
 use crate::Config;
 use eframe::{App, CreationContext};
+use wgpu::{Device, Queue};
+
+#[derive(Default)]
+struct RendererState {
+    counter: u32,
+}
 
 #[derive(Default)]
 struct UIState {
@@ -20,6 +28,25 @@ impl App for UIState {
                 ctx.set_debug_on_hover(self.do_debug_render);
                 ctx.inspection_ui(ui);
             })
+        });
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let (rect, _response) =
+                ui.allocate_at_least(egui::Vec2::splat(128.0), egui::Sense::click());
+            let callback = egui_wgpu::CallbackFn::new()
+                .prepare(|_device: &Device, _queue: &Queue, map| {
+                    map.entry::<RendererState>()
+                        .or_insert_with(Default::default)
+                        .counter += 1;
+                })
+                .paint(|_info, _pass, resources| {
+                    eprintln!("{:?}", resources.get::<RendererState>().unwrap().counter)
+                });
+            let callback = egui::PaintCallback {
+                rect,
+                callback: Arc::new(callback),
+            };
+
+            ui.painter().add(callback)
         });
     }
 }

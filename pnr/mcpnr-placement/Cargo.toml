@@ -17,6 +17,9 @@ winit = "0.26.1"
 [dependencies.egui]
 version = "0.18"
 
+[dependencies.egui-wgpu]
+version = "0.18"
+
 [dependencies.eframe]
 version = "0.18"
 default-features = false
@@ -24,6 +27,7 @@ features = [ "default_fonts", "wgpu" ]
 
 [patch.crates-io]
 egui = { git = "https://github.com/emilk/egui", branch = "master" }
+egui-wgpu = { git = "https://github.com/emilk/egui", branch="master" }
 eframe = { git = "https://github.com/emilk/egui", branch = "master" }
 
 # native egui:
