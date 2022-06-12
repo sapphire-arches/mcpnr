@@ -49,12 +49,9 @@
 
           devShell =
             let
-              pythonPackage = pkgs.python37.withPackages (pythonPackages: [
-                # xdot needs to be here or it chooses its own python version
-                # (3.9) and then numpy explodes horribly because we installed the
-                # numpy built against 3.7
-                pythonPackages.xdot
-                pkgs.amulet-core
+              pythonPackage = pkgs.python39.withPackages (pythonPackages: with pythonPackages; [
+                xdot
+                amulet-core
               ]);
               rust-gui-pkgs = with pkgs; [
                 xorg.libX11
@@ -86,7 +83,7 @@
                   "rust-src"
                   "rustfmt"
                 ])
-                rust-analyzer-nightly
+                fenix.packages.${system}.rust-analyzer
               ] ++ (pkgs.lib.concatMap (p: p.buildInputs) mcpnrPackagesList);
 
               nativeBuildInputs = with pkgs; [
