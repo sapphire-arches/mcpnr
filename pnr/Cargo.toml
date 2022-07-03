@@ -9,4 +9,5 @@ members = [
 
 [patch.crates-io]
 egui = { git = "https://github.com/emilk/egui", branch = "master" }
+egui-wgpu = { git = "https://github.com/emilk/egui", branch="master" }
 eframe = { git = "https://github.com/emilk/egui", branch = "master" }
