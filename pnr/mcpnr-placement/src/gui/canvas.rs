@@ -61,6 +61,9 @@ struct CanvasId(u64);
 /// Canvas for painting on
 pub struct Canvas {
     id: CanvasId,
+
+    /// Scale factor from internal units to pixels
+    pixels_per_unit: f32,
 }
 
 fn initialize_rects_pipeline(
@@ -185,10 +188,13 @@ impl Canvas {
 
         global_resources.canvases.insert(id, render_resources);
 
-        Self { id }
+        Self {
+            id,
+            pixels_per_unit: 16.0,
+        }
     }
 
-    pub fn ui(&self, ui: &mut egui::Ui, size: Vec2) -> egui::Response {
+    pub fn ui(&mut self, ui: &mut egui::Ui, size: Vec2) -> egui::Response {
         let (rect, response) = ui.allocate_at_least(size, egui::Sense::click_and_drag());
 
         // Accessiblity properties (mostly just a stub, this is a purely visual component...)
@@ -198,20 +204,32 @@ impl Canvas {
             info
         });
 
+        if response.hovered() {
+            let delta = ui.input().scroll_delta.y;
+
+            const SCALE: f32 = 0.5;
+
+            let factor = if delta > 0.0 {
+                SCALE
+            } else if delta < 0.0 {
+                1.0 / SCALE
+            } else {
+                1.0
+            };
+
+            self.pixels_per_unit = f32::min(128.0, f32::max(1.0, self.pixels_per_unit * factor));
+        }
+
         let nrects: u32 = 2;
 
         // Compute the transform matrix based on the egui rectangle and a scale factor
-        //
-        // # of pixels per internal unit
-        let pixels_per_unit: f32 = 16.0;
-
         // The output of projection_view will be scaled by rect.width() and rect.height() from [-1,
         // 1] on both axes by the viewport transform. Therefore internal units must be scaled by a
         // factor of (2.0 / rect.width()) to get 1 unit = 1 pixel, and then multiplied by
         // pixels_per_unit to get 1 unit = pixels_per_unit pixels
         let projection_view = na::Scale3::new(
-            (2.0 / rect.width()) * pixels_per_unit,
-            (2.0 / rect.height()) * pixels_per_unit,
+            (2.0 / rect.width()) * self.pixels_per_unit,
+            (2.0 / rect.height()) * self.pixels_per_unit,
             1.0,
         );
 
