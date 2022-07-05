@@ -302,6 +302,11 @@ impl Canvas {
             }
         }
 
+        // Early out: nothing to render
+        if nrects == 0 {
+            return response;
+        }
+
         // Compute the transform matrix based on the egui rectangle and a scale factor
         let projection_view = na::Translation3::new(-self.center.x, -self.center.y, 0.0);
         // The output of projection_view will be scaled by rect.width() and rect.height() from [-1,
