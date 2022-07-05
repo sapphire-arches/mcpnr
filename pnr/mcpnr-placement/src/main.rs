@@ -81,7 +81,14 @@ fn add_common_args<'help>(command: Command<'help>) -> Command<'help> {
         )
 }
 
-fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
+fn load_design(config: &Config) -> Result<Design> {
+    let inf = std::fs::read(&config.input_file)
+        .with_context(|| anyhow!("Open input file {:?}", config.input_file))?;
+    Design::decode(&inf[..])
+        .with_context(|| anyhow!("Failed to parse file {:?}", config.input_file))
+}
+
+fn load_cells(config: &Config, design: Design) -> Result<(PlaceableCells, String)> {
     let top_module = design
         .modules
         .into_values()
@@ -95,8 +102,14 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
 
     let mut cell_factory = CellFactory::new(config.structure_directory.clone());
 
-    let mut cells = PlaceableCells::from_module(top_module, &mut cell_factory)
+    let cells = PlaceableCells::from_module(top_module, &mut cell_factory)
         .with_context(|| "Extract cells")?;
+
+    Ok((cells, design.creator))
+}
+
+fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
+    let (mut cells, creator) = load_cells(config, design).with_context(|| anyhow!("Load cells"))?;
 
     // TODO: smart place
     let mut cx = 0;
@@ -128,16 +141,11 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
     }
     println!("Required tiers: {}", tier + 1);
 
-    Ok(cells.build_output(design.creator))
+    Ok(cells.build_output(creator))
 }
 
 fn run_placement(config: &Config) -> Result<()> {
-    let design = {
-        let inf = std::fs::read(&config.input_file)
-            .with_context(|| anyhow!("Open input file {:?}", config.input_file))?;
-        Design::decode(&inf[..])
-            .with_context(|| anyhow!("Failed to parse file {:?}", config.input_file))?
-    };
+    let design = load_design(config).with_context(|| anyhow!("Load design"))?;
 
     let placed_design = place(&config, design)
         .with_context(|| anyhow!("Place design from {:?}", config.input_file))?;

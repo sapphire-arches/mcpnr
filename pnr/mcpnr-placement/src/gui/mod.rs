@@ -1,22 +1,27 @@
-use crate::Config;
+use crate::{Config, load_design, load_cells, core::PlaceableCells};
 use eframe::{App, CreationContext};
 use log::info;
+use anyhow::Result;
 
 use self::canvas::{Canvas, CanvasGlobalResources, CanvasWidget};
 
 mod canvas;
 
 struct UIState {
-    do_debug_render: bool,
+    cells: PlaceableCells,
+    creator: String,
 
+    // UI state
+    do_debug_render: bool,
     primary_canvas: Canvas,
 }
 
 impl UIState {
-    fn new(cc: &CreationContext) -> Self {
+    fn new(cells: PlaceableCells, creator: String, cc: &CreationContext) -> Self {
         CanvasGlobalResources::register(cc);
 
         Self {
+            cells, creator,
             do_debug_render: false,
             primary_canvas: Canvas::new(cc),
         }
@@ -39,15 +44,18 @@ impl App for UIState {
             })
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add(CanvasWidget::new(&mut self.primary_canvas));
+            ui.add(CanvasWidget::new(&mut self.primary_canvas, &self.cells));
         });
     }
 }
 
-pub(crate) fn run_gui(_config: &Config) {
+pub(crate) fn run_gui(config: &Config) -> Result<()> {
+    let design = load_design(config)?;
+    let (cells, creator) = load_cells(config, design)?;
+
     eframe::run_native(
         "mcpnr placement",
         eframe::NativeOptions::default(),
-        Box::new(|cc| Box::new(UIState::new(cc))),
+        Box::new(|cc| Box::new(UIState::new(cells, creator, cc))),
     )
 }

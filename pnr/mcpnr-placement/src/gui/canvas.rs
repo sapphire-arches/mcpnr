@@ -8,6 +8,8 @@ use eframe::wgpu::{self, Device};
 use egui::{Vec2, Widget, WidgetInfo};
 use nalgebra as na;
 
+use crate::core::PlaceableCells;
+
 /// Global render state used to cache pipelines
 pub struct CanvasGlobalResources {
     /// Pipeline used to render the rectangles
@@ -72,6 +74,7 @@ pub struct Canvas {
 /// Ephermeral state, for use with `egui::Ui::add`
 pub struct CanvasWidget<'a> {
     canvas: &'a mut Canvas,
+    cells: &'a PlaceableCells,
 }
 
 fn initialize_rects_pipeline(
@@ -203,7 +206,7 @@ impl Canvas {
         }
     }
 
-    fn render_canvas(&mut self, ui: &mut egui::Ui) -> egui::Response {
+    fn render_canvas(&mut self, ui: &mut egui::Ui, cells: &PlaceableCells) -> egui::Response {
         let (rect, response) =
             ui.allocate_at_least(ui.available_size(), egui::Sense::click_and_drag());
 
@@ -234,7 +237,70 @@ impl Canvas {
             self.center += response.drag_delta() / self.pixels_per_unit;
         }
 
-        let nrects: u32 = 2;
+        // Compute the size in pixels
+        let pixel_width = rect.width() * ui.ctx().pixels_per_point();
+        let pixel_height = rect.height() * ui.ctx().pixels_per_point();
+
+        //
+        // Extract the rectangles we should render
+        //
+        // Compute clip border in internal units
+        let clip_width = pixel_width / self.pixels_per_unit;
+        let clip_height = pixel_height / self.pixels_per_unit;
+
+        let clip_rect = egui::Rect {
+            min: (
+                self.center.x - clip_width / 2.0,
+                self.center.y - clip_height / 2.0,
+            )
+                .into(),
+            max: (
+                self.center.x + clip_width / 2.0,
+                self.center.y + clip_height / 2.0,
+            )
+                .into(),
+        };
+
+        let mut nrects: u32 = 0;
+        let mut rect_vertex_data: Vec<RectVertex> = Vec::new();
+        let mut rect_indicies: Vec<RectIndexType> = Vec::new();
+
+        for cell in &cells.cells {
+            let x = cell.x as f32;
+            let y = cell.y as f32;
+            let sx = cell.sx as f32;
+            let sy = cell.sy as f32;
+
+            let cell_rect = egui::Rect {
+                min: (x - sx / 2.0, y - sy / 2.0).into(),
+                max: (x + sx / 2.0, y + sy / 2.0).into(),
+            };
+
+            if cell_rect.intersects(clip_rect) {
+                let base_idx: u16 = rect_vertex_data.len().try_into().unwrap();
+                rect_vertex_data.push(RectVertex {
+                    pos: Vec2::new(cell_rect.min.x, cell_rect.min.y),
+                });
+                rect_vertex_data.push(RectVertex {
+                    pos: Vec2::new(cell_rect.min.x, cell_rect.max.y),
+                });
+                rect_vertex_data.push(RectVertex {
+                    pos: Vec2::new(cell_rect.max.x, cell_rect.max.y),
+                });
+                rect_vertex_data.push(RectVertex {
+                    pos: Vec2::new(cell_rect.max.x, cell_rect.min.y),
+                });
+
+                rect_indicies.push(base_idx + 0);
+                rect_indicies.push(base_idx + 1);
+                rect_indicies.push(base_idx + 2);
+                rect_indicies.push(base_idx + 3);
+                rect_indicies.push(base_idx + 0);
+                rect_indicies.push(0xffff);
+
+                nrects += 1;
+            }
+        }
 
         // Compute the transform matrix based on the egui rectangle and a scale factor
         let projection_view = na::Translation3::new(-self.center.x, -self.center.y, 0.0);
@@ -243,8 +309,8 @@ impl Canvas {
         // factor of (2.0 / rect.width()) to get 1 unit = 1 pixel, and then multiplied by
         // pixels_per_unit to get 1 unit = pixels_per_unit pixels
         let projection_view = na::Scale3::new(
-            (-2.0 / rect.width()) * self.pixels_per_unit,
-            (2.0 / rect.height()) * self.pixels_per_unit,
+            (-2.0 / pixel_width) * self.pixels_per_unit,
+            (2.0 / pixel_height) * self.pixels_per_unit,
             1.0,
         )
         .to_homogeneous()
@@ -275,7 +341,7 @@ impl Canvas {
                     // This is a cursed way of computing the next largest power of 2
                     // If we have a 16-bit number like this:
                     //     0000000000001001 = 9
-                    // then leading_zeros will return 12, and new_log_2 becomes (16) - 12 = 4
+                    // then leading_zeros will return 12, and new_log_2 becomes (16) - 12 + 2 = 5
                     // and (1 << 4) = 16 (which is the smallest power of two > 9)
                     //
                     // This overestimates for exact powers of two but that shouldn't matter much
@@ -287,51 +353,23 @@ impl Canvas {
 
                     let new_rect_count = 1 << rect_count_log2;
 
-                    let (idx, vtx) = alloc_rect_buffers(device, new_rect_count);
+                    let (vtx, idx) = alloc_rect_buffers(device, new_rect_count);
 
                     local_resources.rect_index_buffer = idx;
                     local_resources.rect_vertex_buffer = vtx;
+                    local_resources.rect_count = new_rect_count;
                 }
 
                 queue.write_buffer(
                     &local_resources.rect_vertex_buffer,
                     0,
-                    bytemuck::cast_slice(&[
-                        RectVertex {
-                            pos: Vec2::new(0.0, 5.0),
-                        },
-                        RectVertex {
-                            pos: Vec2::new(5.0, 5.0),
-                        },
-                        RectVertex {
-                            pos: Vec2::new(5.0, 0.0),
-                        },
-                        RectVertex {
-                            pos: Vec2::new(0.0, 0.0),
-                        },
-                        // rectangle 2
-                        RectVertex {
-                            pos: Vec2::new(-1.0, 1.0),
-                        },
-                        RectVertex {
-                            pos: Vec2::new(1.0, 1.0),
-                        },
-                        RectVertex {
-                            pos: Vec2::new(1.0, -1.0),
-                        },
-                        RectVertex {
-                            pos: Vec2::new(-1.0, -1.0),
-                        },
-                    ]),
+                    bytemuck::cast_slice(&rect_vertex_data),
                 );
 
                 queue.write_buffer(
                     &local_resources.rect_index_buffer,
                     0,
-                    bytemuck::cast_slice(&[
-                        0u16, 1, 2, 3, 0, 0xffff, // rect 0
-                        4u16, 5, 6, 7, 4, 0xffff, // rect 1
-                    ]),
+                    bytemuck::cast_slice(&rect_indicies),
                 );
 
                 queue.write_buffer(
@@ -405,8 +443,8 @@ impl CanvasId {
 }
 
 impl<'a> CanvasWidget<'a> {
-    pub fn new(canvas: &'a mut Canvas) -> Self {
-        Self { canvas }
+    pub fn new(canvas: &'a mut Canvas, cells: &'a PlaceableCells) -> Self {
+        Self { canvas, cells }
     }
 }
 
@@ -423,7 +461,7 @@ impl<'a> Widget for CanvasWidget<'a> {
                 ui.label(info_string);
 
                 egui::Frame::canvas(ui.style())
-                    .show(ui, |ui| self.canvas.render_canvas(ui))
+                    .show(ui, |ui| self.canvas.render_canvas(ui, self.cells))
                     .inner
             },
         )
