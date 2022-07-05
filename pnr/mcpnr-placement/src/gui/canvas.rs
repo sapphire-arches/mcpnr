@@ -6,6 +6,7 @@ use std::{
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu::{self, Device};
 use egui::{Vec2, WidgetInfo};
+use nalgebra as na;
 
 /// Global render state used to cache pipelines
 pub struct CanvasGlobalResources {
@@ -199,12 +200,35 @@ impl Canvas {
 
         let nrects: u32 = 2;
 
-        let rect_uniforms = RectangleUniforms {
-            projection_view: [
-                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-            ],
+        // Compute the transform matrix based on the egui rectangle and a scale factor
+        //
+        // # of pixels per internal unit
+        let pixels_per_unit: f32 = 16.0;
+
+        // The output of projection_view will be scaled by rect.width() and rect.height() from [-1,
+        // 1] on both axes by the viewport transform. Therefore internal units must be scaled by a
+        // factor of (2.0 / rect.width()) to get 1 unit = 1 pixel, and then multiplied by
+        // pixels_per_unit to get 1 unit = pixels_per_unit pixels
+        let projection_view = na::Scale3::new(
+            (2.0 / rect.width()) * pixels_per_unit,
+            (2.0 / rect.height()) * pixels_per_unit,
+            1.0,
+        );
+
+        let mut rect_uniforms = RectangleUniforms {
+            projection_view: [0.0; 16],
             color: [1.0, 0.0, 1.0, 1.0],
         };
+
+        assert!(projection_view.to_homogeneous().as_slice().len() == 16);
+        for (i, f) in projection_view
+            .to_homogeneous()
+            .as_slice()
+            .iter()
+            .enumerate()
+        {
+            rect_uniforms.projection_view[i] = *f;
+        }
 
         let id = self.id;
 
@@ -244,29 +268,29 @@ impl Canvas {
                     0,
                     bytemuck::cast_slice(&[
                         RectVertex {
-                            pos: Vec2::new(-0.5, 0.5),
+                            pos: Vec2::new(0.0, 5.0),
                         },
                         RectVertex {
-                            pos: Vec2::new(0.5, 0.5),
+                            pos: Vec2::new(5.0, 5.0),
                         },
                         RectVertex {
-                            pos: Vec2::new(0.5, -0.5),
+                            pos: Vec2::new(5.0, 0.0),
                         },
                         RectVertex {
-                            pos: Vec2::new(-0.5, -0.5),
+                            pos: Vec2::new(0.0, 0.0),
                         },
                         // rectangle 2
                         RectVertex {
-                            pos: Vec2::new(-0.25, 0.25),
+                            pos: Vec2::new(-1.0, 1.0),
                         },
                         RectVertex {
-                            pos: Vec2::new(0.25, 0.25),
+                            pos: Vec2::new(1.0, 1.0),
                         },
                         RectVertex {
-                            pos: Vec2::new(0.25, -0.25),
+                            pos: Vec2::new(1.0, -1.0),
                         },
                         RectVertex {
-                            pos: Vec2::new(-0.25, -0.25),
+                            pos: Vec2::new(-1.0, -1.0),
                         },
                     ]),
                 );
@@ -275,10 +299,8 @@ impl Canvas {
                     &local_resources.rect_index_buffer,
                     0,
                     bytemuck::cast_slice(&[
-                        // rect 0
-                        0u16, 1, 2, 3, 0, 0xffff,
-                        // rect 1
-                        4u16, 5, 6, 7, 4, 0xffff,
+                        0u16, 1, 2, 3, 0, 0xffff, // rect 0
+                        4u16, 5, 6, 7, 4, 0xffff, // rect 1
                     ]),
                 );
 

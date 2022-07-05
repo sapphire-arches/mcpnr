@@ -5,11 +5,12 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
+bytemuck = "1"
 clap = "3.1.5"
 itertools = "0.10"
 log = "0.4"
 mcpnr-common = { path = "../mcpnr-common" }
-bytemuck = "1"
+nalgebra = "0.31"
 quartz_nbt = { version = "0.2", features = [ "serde" ] }
 winit = "0.26.1"
 
