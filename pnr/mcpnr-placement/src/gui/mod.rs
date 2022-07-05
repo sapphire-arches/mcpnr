@@ -25,11 +25,17 @@ impl UIState {
 
 impl App for UIState {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let panel = egui::SidePanel::right("debug_panel").show(ctx, |ui| {
+        egui::SidePanel::right("debug_panel").show(ctx, |ui| {
             ui.collapsing("EGUI inspection", |ui| {
                 ui.checkbox(&mut self.do_debug_render, "Do debug rendering");
                 ctx.set_debug_on_hover(self.do_debug_render);
                 ctx.inspection_ui(ui);
+            });
+
+            ui.with_layout(egui::Layout::bottom_up(egui::Align::Max), |ui| {
+                if ui.button("quit").clicked() {
+                    frame.quit();
+                }
             })
         });
         egui::CentralPanel::default().show(ctx, |ui| {
