@@ -5,7 +5,7 @@ use std::{
 
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu::{self, Device};
-use egui::{Vec2, WidgetInfo, Widget};
+use egui::{Vec2, Widget, WidgetInfo};
 use nalgebra as na;
 
 /// Global render state used to cache pipelines
@@ -64,6 +64,9 @@ pub struct Canvas {
 
     /// Scale factor from internal units to pixels
     pixels_per_unit: f32,
+
+    /// Center location for the render
+    center: Vec2,
 }
 
 /// Ephermeral state, for use with `egui::Ui::add`
@@ -196,11 +199,13 @@ impl Canvas {
         Self {
             id,
             pixels_per_unit: 16.0,
+            center: Vec2::splat(0.0),
         }
     }
 
     fn render_canvas(&mut self, ui: &mut egui::Ui) -> egui::Response {
-        let (rect, response) = ui.allocate_at_least(ui.available_size(), egui::Sense::click_and_drag());
+        let (rect, response) =
+            ui.allocate_at_least(ui.available_size(), egui::Sense::click_and_drag());
 
         // Accessiblity properties (mostly just a stub, this is a purely visual component...)
         response.widget_info(|| {
@@ -225,31 +230,33 @@ impl Canvas {
             self.pixels_per_unit = f32::min(128.0, f32::max(1.0, self.pixels_per_unit * factor));
         }
 
+        if response.dragged() {
+            self.center += response.drag_delta() / self.pixels_per_unit;
+        }
+
         let nrects: u32 = 2;
 
         // Compute the transform matrix based on the egui rectangle and a scale factor
+        let projection_view = na::Translation3::new(-self.center.x, -self.center.y, 0.0);
         // The output of projection_view will be scaled by rect.width() and rect.height() from [-1,
         // 1] on both axes by the viewport transform. Therefore internal units must be scaled by a
         // factor of (2.0 / rect.width()) to get 1 unit = 1 pixel, and then multiplied by
         // pixels_per_unit to get 1 unit = pixels_per_unit pixels
         let projection_view = na::Scale3::new(
-            (2.0 / rect.width()) * self.pixels_per_unit,
+            (-2.0 / rect.width()) * self.pixels_per_unit,
             (2.0 / rect.height()) * self.pixels_per_unit,
             1.0,
-        );
+        )
+        .to_homogeneous()
+            * projection_view.to_homogeneous();
 
         let mut rect_uniforms = RectangleUniforms {
             projection_view: [0.0; 16],
             color: [1.0, 0.0, 1.0, 1.0],
         };
 
-        assert!(projection_view.to_homogeneous().as_slice().len() == 16);
-        for (i, f) in projection_view
-            .to_homogeneous()
-            .as_slice()
-            .iter()
-            .enumerate()
-        {
+        assert_eq!(projection_view.as_slice().len(), 16);
+        for (i, f) in projection_view.as_slice().iter().enumerate() {
             rect_uniforms.projection_view[i] = *f;
         }
 
@@ -399,21 +406,27 @@ impl CanvasId {
 
 impl<'a> CanvasWidget<'a> {
     pub fn new(canvas: &'a mut Canvas) -> Self {
-        Self {
-            canvas,
-        }
+        Self { canvas }
     }
 }
 
 impl<'a> Widget for CanvasWidget<'a> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        ui.allocate_ui_with_layout(ui.available_size(), egui::Layout::bottom_up(egui::Align::Min), |ui| {
-            let info_string = format!("Scale: {:.02}", self.canvas.pixels_per_unit);
-            ui.label(info_string);
+        ui.allocate_ui_with_layout(
+            ui.available_size(),
+            egui::Layout::bottom_up(egui::Align::Min),
+            |ui| {
+                let info_string = format!(
+                    "Scale: {:.02} X: {:0.2} Y: {:0.2}",
+                    self.canvas.pixels_per_unit, self.canvas.center.x, self.canvas.center.y,
+                );
+                ui.label(info_string);
 
-            egui::Frame::canvas(ui.style()).show(ui, |ui| {
-                self.canvas.render_canvas(ui)
-            })
-        }).response
+                egui::Frame::canvas(ui.style())
+                    .show(ui, |ui| self.canvas.render_canvas(ui))
+                    .inner
+            },
+        )
+        .inner
     }
 }
