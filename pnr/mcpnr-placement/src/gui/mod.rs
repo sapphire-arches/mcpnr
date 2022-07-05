@@ -2,7 +2,7 @@ use crate::Config;
 use eframe::{App, CreationContext};
 use log::info;
 
-use self::canvas::{Canvas, CanvasGlobalResources};
+use self::canvas::{Canvas, CanvasGlobalResources, CanvasWidget};
 
 mod canvas;
 
@@ -33,7 +33,7 @@ impl App for UIState {
             })
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.primary_canvas.ui(ui, ui.available_size());
+            ui.add(CanvasWidget::new(&mut self.primary_canvas));
         });
     }
 }

@@ -5,7 +5,7 @@ use std::{
 
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu::{self, Device};
-use egui::{Vec2, WidgetInfo};
+use egui::{Vec2, WidgetInfo, Widget};
 use nalgebra as na;
 
 /// Global render state used to cache pipelines
@@ -64,6 +64,11 @@ pub struct Canvas {
 
     /// Scale factor from internal units to pixels
     pixels_per_unit: f32,
+}
+
+/// Ephermeral state, for use with `egui::Ui::add`
+pub struct CanvasWidget<'a> {
+    canvas: &'a mut Canvas,
 }
 
 fn initialize_rects_pipeline(
@@ -194,8 +199,8 @@ impl Canvas {
         }
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui, size: Vec2) -> egui::Response {
-        let (rect, response) = ui.allocate_at_least(size, egui::Sense::click_and_drag());
+    fn render_canvas(&mut self, ui: &mut egui::Ui) -> egui::Response {
+        let (rect, response) = ui.allocate_at_least(ui.available_size(), egui::Sense::click_and_drag());
 
         // Accessiblity properties (mostly just a stub, this is a purely visual component...)
         response.widget_info(|| {
@@ -389,5 +394,26 @@ impl CanvasId {
     fn allocate() -> Self {
         // technically this can wrap, but 2^64 is a very large number
         Self(CANVAS_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::AcqRel))
+    }
+}
+
+impl<'a> CanvasWidget<'a> {
+    pub fn new(canvas: &'a mut Canvas) -> Self {
+        Self {
+            canvas,
+        }
+    }
+}
+
+impl<'a> Widget for CanvasWidget<'a> {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        ui.allocate_ui_with_layout(ui.available_size(), egui::Layout::bottom_up(egui::Align::Min), |ui| {
+            let info_string = format!("Scale: {:.02}", self.canvas.pixels_per_unit);
+            ui.label(info_string);
+
+            egui::Frame::canvas(ui.style()).show(ui, |ui| {
+                self.canvas.render_canvas(ui)
+            })
+        }).response
     }
 }
