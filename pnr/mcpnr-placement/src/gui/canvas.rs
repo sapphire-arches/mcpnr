@@ -267,13 +267,13 @@ impl Canvas {
 
         for cell in &cells.cells {
             let x = cell.x as f32;
-            let y = cell.y as f32;
+            let y = cell.z as f32;
             let sx = cell.sx as f32;
-            let sy = cell.sy as f32;
+            let sy = cell.sz as f32;
 
             let cell_rect = egui::Rect {
-                min: (x - sx / 2.0, y - sy / 2.0).into(),
-                max: (x + sx / 2.0, y + sy / 2.0).into(),
+                min: (x, y).into(),
+                max: (x + sx, y + sy).into(),
             };
 
             if cell_rect.intersects(clip_rect) {
