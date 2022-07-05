@@ -9,9 +9,8 @@ clap = "3.1.5"
 itertools = "0.10"
 log = "0.4"
 mcpnr-common = { path = "../mcpnr-common" }
-pollster = "0.2.5"
+bytemuck = "1"
 quartz_nbt = { version = "0.2", features = [ "serde" ] }
-wgpu = "0.12.0"
 winit = "0.26.1"
 
 [dependencies.egui]

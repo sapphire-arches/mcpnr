@@ -1062,6 +1062,7 @@ name = "mcpnr-placement"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "clap",
  "console_error_panic_hook",
  "eframe",
@@ -1070,7 +1071,6 @@ dependencies = [
  "itertools",
  "log",
  "mcpnr-common",
- "pollster",
  "quartz_nbt",
  "tracing-subscriber",
  "tracing-wasm",
