@@ -1,13 +1,14 @@
-use crate::{Config, load_design, load_cells, core::PlaceableCells};
+use crate::{core::PlaceableCells, load_cells, load_design, place, run_placement, Config, place_algorithm};
+use anyhow::Result;
 use eframe::{App, CreationContext};
 use log::info;
-use anyhow::Result;
 
 use self::canvas::{Canvas, CanvasGlobalResources, CanvasWidget};
 
 mod canvas;
 
 struct UIState {
+    config: Config,
     cells: PlaceableCells,
     creator: String,
 
@@ -17,11 +18,13 @@ struct UIState {
 }
 
 impl UIState {
-    fn new(cells: PlaceableCells, creator: String, cc: &CreationContext) -> Self {
+    fn new(config: Config, cells: PlaceableCells, creator: String, cc: &CreationContext) -> Self {
         CanvasGlobalResources::register(cc);
 
         Self {
-            cells, creator,
+            config,
+            cells,
+            creator,
             do_debug_render: false,
             primary_canvas: Canvas::new(cc),
         }
@@ -31,6 +34,10 @@ impl UIState {
 impl App for UIState {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::SidePanel::right("debug_panel").show(ctx, |ui| {
+            if ui.button("Run placement").clicked() {
+                place_algorithm(&self.config, &mut self.cells)
+            }
+
             ui.collapsing("EGUI inspection", |ui| {
                 ui.checkbox(&mut self.do_debug_render, "Do debug rendering");
                 ctx.set_debug_on_hover(self.do_debug_render);
@@ -50,12 +57,13 @@ impl App for UIState {
 }
 
 pub(crate) fn run_gui(config: &Config) -> Result<()> {
-    let design = load_design(config)?;
-    let (cells, creator) = load_cells(config, design)?;
+    let config = config.clone();
+    let design = load_design(&config)?;
+    let (cells, creator) = load_cells(&config, design)?;
 
     eframe::run_native(
         "mcpnr placement",
         eframe::NativeOptions::default(),
-        Box::new(|cc| Box::new(UIState::new(cells, creator, cc))),
+        Box::new(|cc| Box::new(UIState::new(config, cells, creator, cc))),
     )
 }

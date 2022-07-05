@@ -108,9 +108,7 @@ fn load_cells(config: &Config, design: Design) -> Result<(PlaceableCells, String
     Ok((cells, design.creator))
 }
 
-fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
-    let (mut cells, creator) = load_cells(config, design).with_context(|| anyhow!("Load cells"))?;
-
+fn place_algorithm(config: &Config, cells: &mut PlaceableCells) {
     // TODO: smart place
     let mut cx = 0;
     let mut cz = 4;
@@ -140,6 +138,12 @@ fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
         row_max_z = std::cmp::max(cell.sz, row_max_z);
     }
     println!("Required tiers: {}", tier + 1);
+}
+
+fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
+    let (mut cells, creator) = load_cells(config, design).with_context(|| anyhow!("Load cells"))?;
+
+    place_algorithm(&config, &mut cells);
 
     Ok(cells.build_output(creator))
 }
@@ -180,8 +184,7 @@ fn main() -> Result<()> {
 
     match matches.subcommand() {
         Some(("gui", matches)) => {
-            gui::run_gui(&Config::from_args(matches).context("Building config from args")?);
-            Ok(())
+            gui::run_gui(&Config::from_args(matches).context("Building config from args")?)
         }
         Some(("place", matches)) => {
             run_placement(&Config::from_args(matches).context("Building config from args")?)
