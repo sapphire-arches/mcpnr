@@ -6,6 +6,7 @@ use std::{
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu::{self, Device};
 use egui::{Vec2, Widget, WidgetInfo};
+use itertools::Itertools;
 use nalgebra as na;
 
 use crate::core::PlaceableCells;
@@ -16,6 +17,10 @@ pub struct CanvasGlobalResources {
     rects_pipeline: wgpu::RenderPipeline,
     /// Bind group layout for rectangle pipeline
     rects_bind_group_layout: wgpu::BindGroupLayout,
+    /// Pipeline used to render the lines
+    lines_pipeline: wgpu::RenderPipeline,
+    /// Bind group layout for line pipeline
+    lines_bind_group_layout: wgpu::BindGroupLayout,
     // TODO: render lines for connections
     // lines_pipeline: wgpu::RenderPipeline
     /// Storage for per-canvas resources
@@ -41,11 +46,15 @@ const VERTEX_PER_RECT: u64 = 4;
 /// then 1 for the reset
 const INDEX_PER_RECT: u64 = 6;
 
+/// 2 verticies for each line
+const VERTEX_PER_CONN: u64 = 2;
+
 type RectIndexType = u16;
 const RECT_INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint16;
 
 /// Per-canvas render resources
 struct CanvasRenderResources {
+    // Rectangle resources
     rect_uniform_buffer: wgpu::Buffer,
     rect_bind_group: wgpu::BindGroup,
 
@@ -54,6 +63,13 @@ struct CanvasRenderResources {
     /// Number of rectangle slots we have allocated in `Self::rect_vertex_buffer` and
     /// `Self::rect_index_buffer`
     rect_count: u64,
+
+    // line uniforms
+    line_uniform_buffer: wgpu::Buffer,
+    line_bind_group: wgpu::BindGroup,
+
+    line_vertex_buffer: wgpu::Buffer,
+    line_count: u64,
 }
 
 #[repr(transparent)]
@@ -79,13 +95,9 @@ pub struct CanvasWidget<'a> {
 
 fn initialize_rects_pipeline(
     device: &Device,
+    shader: &wgpu::ShaderModule,
     rs_target_format: wgpu::ColorTargetState,
 ) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("canvas.rects.shader"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("./canvas_shaders.wgsl").into()),
-    });
-
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("canvas.rects.bind_group_layout"),
         entries: &[wgpu::BindGroupLayoutEntry {
@@ -138,14 +150,78 @@ fn initialize_rects_pipeline(
     (pipeline, bind_group_layout)
 }
 
+fn initialize_lines_pipeline(
+    device: &Device,
+    shader: &wgpu::ShaderModule,
+    rs_target_format: wgpu::ColorTargetState,
+) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("canvas.lines.bind_group_layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("canvas.lines.pipeline_layout"),
+        bind_group_layouts: &[&bind_group_layout],
+        push_constant_ranges: &[],
+    });
+
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("canvas.lines.pipeline"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: "vs_main",
+            buffers: &[wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<Vec2>() as wgpu::BufferAddress,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![
+                    0 => Float32x2
+                ],
+            }],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: "fs_main",
+            targets: &[Some(rs_target_format)],
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::LineList,
+            ..wgpu::PrimitiveState::default()
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+    });
+
+    (pipeline, bind_group_layout)
+}
+
 impl CanvasGlobalResources {
     pub fn register(cc: &eframe::CreationContext) {
         let render_state = cc.render_state.as_ref().expect("WGPU enabled");
 
         let device = &render_state.device;
 
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("canvas.shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("./canvas_shaders.wgsl").into()),
+        });
+
         let (rects_pipeline, rects_bind_group_layout) =
-            initialize_rects_pipeline(device, render_state.target_format.into());
+            initialize_rects_pipeline(device, &shader, render_state.target_format.into());
+
+        let (lines_pipeline, lines_bind_group_layout) =
+            initialize_lines_pipeline(device, &shader, render_state.target_format.into());
 
         render_state
             .egui_rpass
@@ -154,6 +230,8 @@ impl CanvasGlobalResources {
             .insert(Self {
                 rects_pipeline,
                 rects_bind_group_layout,
+                lines_pipeline,
+                lines_bind_group_layout,
                 canvases: Default::default(),
             });
     }
@@ -187,12 +265,39 @@ impl Canvas {
 
         let (rect_vertex_buffer, rect_index_buffer) = alloc_rect_buffers(device, 16);
 
+        let line_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("canvas.lines.uniforms"),
+            size: std::mem::size_of::<RectangleUniforms>() as _,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let line_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("canvas.lines.bind_group"),
+            layout: &global_resources.lines_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: line_uniform_buffer.as_entire_binding(),
+            }],
+        });
+
+        let line_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("canvas.lines.vertex"),
+            size: std::mem::size_of::<RectVertex>() as u64 * VERTEX_PER_CONN * 16,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         let render_resources = CanvasRenderResources {
             rect_uniform_buffer,
             rect_bind_group,
             rect_index_buffer,
             rect_vertex_buffer,
             rect_count: 16,
+            line_uniform_buffer,
+            line_bind_group,
+            line_vertex_buffer,
+            line_count: 16,
         };
 
         let id = CanvasId::allocate();
@@ -302,6 +407,33 @@ impl Canvas {
             }
         }
 
+        let mut nlines: u32 = 0;
+        let mut line_vertex_data: Vec<RectVertex> = Vec::new();
+
+        for signal in &cells.signals {
+            for (s, e) in signal
+                .connected_cells
+                .iter()
+                .map(|cell| {
+                    let cell = &cells.cells[*cell];
+                    (
+                        cell.x as f32 + cell.sx as f32 / 2.0,
+                        cell.z as f32 + cell.sz as f32 / 2.0,
+                    )
+                })
+                .tuple_windows()
+            {
+                if !clip_rect.contains(s.into()) && !clip_rect.contains(e.into()) {
+                    continue;
+                }
+
+                line_vertex_data.push(RectVertex { pos: s.into() });
+                line_vertex_data.push(RectVertex { pos: e.into() });
+
+                nlines += 1;
+            }
+        }
+
         // Early out: nothing to render
         if nrects == 0 {
             return response;
@@ -331,6 +463,11 @@ impl Canvas {
             rect_uniforms.projection_view[i] = *f;
         }
 
+        let line_uniforms = RectangleUniforms {
+            color: [1.0, 0.0, 0.0, 1.0],
+            ..rect_uniforms
+        };
+
         let id = self.id;
 
         let cb = egui_wgpu::CallbackFn::new()
@@ -342,21 +479,7 @@ impl Canvas {
 
                 let rect_count: u64 = nrects.into();
                 if rect_count > local_resources.rect_count {
-                    // Need to grow the buffers
-                    // This is a cursed way of computing the next largest power of 2
-                    // If we have a 16-bit number like this:
-                    //     0000000000001001 = 9
-                    // then leading_zeros will return 12, and new_log_2 becomes (16) - 12 + 2 = 5
-                    // and (1 << 4) = 16 (which is the smallest power of two > 9)
-                    //
-                    // This overestimates for exact powers of two but that shouldn't matter much
-                    // in practice
-                    //
-                    // It would be much clearer if u64::log2 was stable but it's not
-                    let rect_count_log2 = (std::mem::size_of_val(&rect_count) as u32 * 8u32)
-                        - rect_count.leading_zeros();
-
-                    let new_rect_count = 1 << rect_count_log2;
+                    let new_rect_count = 2 * round_next_pow2(rect_count);
 
                     let (vtx, idx) = alloc_rect_buffers(device, new_rect_count);
 
@@ -381,6 +504,36 @@ impl Canvas {
                     &local_resources.rect_uniform_buffer,
                     0,
                     bytemuck::cast_slice(&[rect_uniforms]),
+                );
+
+                let line_count: u64 = nlines.into();
+                if line_count > local_resources.line_count {
+                    let new_line_count = 2 * round_next_pow2(line_count);
+                    log::info!("Computed new line count: {:?}", new_line_count);
+
+                    let vtx = device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("canvas.line.vertex"),
+                        size: std::mem::size_of::<RectVertex>() as u64
+                            * VERTEX_PER_CONN
+                            * new_line_count,
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    });
+
+                    local_resources.line_vertex_buffer = vtx;
+                    local_resources.line_count = new_line_count;
+                }
+
+                queue.write_buffer(
+                    &local_resources.line_vertex_buffer,
+                    0,
+                    bytemuck::cast_slice(&line_vertex_data),
+                );
+
+                queue.write_buffer(
+                    &local_resources.line_uniform_buffer,
+                    0,
+                    bytemuck::cast_slice(&[line_uniforms]),
                 );
             })
             .paint(move |_info, rpass, paint_callback_resources| {
@@ -408,6 +561,18 @@ impl Canvas {
                     RECT_INDEX_FORMAT,
                 );
                 rpass.draw_indexed(0..(nrects * INDEX_PER_RECT as u32), 0, 0..1);
+
+                rpass.set_pipeline(&global_resources.lines_pipeline);
+                rpass.set_bind_group(0, &local_resources.line_bind_group, &[]);
+                rpass.set_vertex_buffer(
+                    0,
+                    local_resources.line_vertex_buffer.slice(
+                        ..(nlines as u64
+                            * VERTEX_PER_CONN
+                            * std::mem::size_of::<RectVertex>() as u64),
+                    ),
+                );
+                rpass.draw(0..(nlines * 2), 0..1);
             });
 
         ui.painter().add(egui::PaintCallback {
@@ -435,6 +600,18 @@ fn alloc_rect_buffers(device: &wgpu::Device, count: u64) -> (wgpu::Buffer, wgpu:
     });
 
     (vertex, index)
+}
+
+fn round_next_pow2(mut v: u64) -> u64 {
+    v -= 1;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v |= v >> 32;
+
+    v + 1
 }
 
 /// CanvasId counter

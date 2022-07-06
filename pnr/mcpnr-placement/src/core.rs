@@ -15,6 +15,11 @@ pub struct CellMetadata {
     pub ty: String,
 }
 
+pub struct Signal {
+    /// Vector of indicies into `PlaceableCells::cells`
+    pub connected_cells: Vec<usize>,
+}
+
 impl CellMetadata {}
 
 pub struct PlaceableCells {
@@ -22,6 +27,8 @@ pub struct PlaceableCells {
     /// later.
     pub cells: Vec<PlacementCell>,
     pub metadata: Vec<CellMetadata>,
+
+    pub signals: Vec<Signal>,
     pub net_names: Vec<Netname>,
 }
 
@@ -29,13 +36,29 @@ impl PlaceableCells {
     pub fn from_module(m: Module, cell_factory: &mut CellFactory) -> Result<Self> {
         let mut cells = Vec::with_capacity(m.cell.len());
         let mut metadata = Vec::with_capacity(m.cell.len());
+        let mut signals: HashMap<u64, Vec<usize>> = HashMap::new();
 
         for (key, cell) in m.cell {
+            let cell_idx = cells.len();
             cells.push(
                 cell_factory
                     .build_cell(&cell)
                     .with_context(|| anyhow!("Pushing cell {:?}", key))?,
             );
+
+            for (_, bits) in &cell.connection {
+                for signal in &bits.signal {
+                    use mcpnr_common::protos::yosys::pb::signal::Type;
+                    match signal.r#type {
+                        Some(Type::Id(i)) => signals
+                            .entry(i as u64)
+                            .or_insert_with(|| Vec::new())
+                            .push(cell_idx),
+                        _ => {}
+                    }
+                }
+            }
+
             metadata.push(CellMetadata {
                 attributes: cell.attribute,
                 connection: cell.connection,
@@ -44,9 +67,15 @@ impl PlaceableCells {
             })
         }
 
+        let signals = signals
+            .into_iter()
+            .map(|(_, v)| Signal { connected_cells: v })
+            .collect();
+
         Ok(Self {
             cells,
             metadata,
+            signals,
             net_names: m.netname,
         })
     }
