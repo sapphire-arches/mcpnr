@@ -1,7 +1,8 @@
-use crate::{core::PlaceableCells, load_cells, load_design, place, run_placement, Config, place_algorithm};
+use crate::{
+    core::PlaceableCells, load_cells, load_design, place, place_algorithm, run_placement, Config,
+};
 use anyhow::Result;
 use eframe::{App, CreationContext};
-use log::info;
 
 use self::canvas::{Canvas, CanvasGlobalResources, CanvasWidget};
 
@@ -46,7 +47,7 @@ impl App for UIState {
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::Max), |ui| {
                 if ui.button("quit").clicked() {
-                    frame.quit();
+                    frame.close();
                 }
             })
         });
@@ -65,5 +66,7 @@ pub(crate) fn run_gui(config: &Config) -> Result<()> {
         "mcpnr placement",
         eframe::NativeOptions::default(),
         Box::new(|cc| Box::new(UIState::new(config, cells, creator, cc))),
-    )
+    );
+
+    Ok(())
 }

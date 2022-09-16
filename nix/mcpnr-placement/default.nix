@@ -1,7 +1,13 @@
 { pkgs
+, cmake
+, pkg-config
+, protobuf
+
+, freetype
+, fontconfig
 , mcpnr-rust-platform
-, xorg
 , vulkan-loader
+, xorg
 }:
 mcpnr-rust-platform.buildRustPackage rec {
   pname = "mcpnr-placement";
@@ -16,15 +22,21 @@ mcpnr-rust-platform.buildRustPackage rec {
 
   #TODO: For packaging, we need to wrap the program to set LD_LIBRARY_PATH
 
-  nativeBuildInputs = [ pkgs.protobuf ];
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    protobuf
+  ];
 
   buildInputs = [
+    fontconfig
+    freetype
+    vulkan-loader
     xorg.libX11
     xorg.libXcursor
-    xorg.libXrandr
     xorg.libXi
-    xorg.libxcb
+    xorg.libXrandr
     xorg.libXrender
-    vulkan-loader
+    xorg.libxcb
   ];
 }

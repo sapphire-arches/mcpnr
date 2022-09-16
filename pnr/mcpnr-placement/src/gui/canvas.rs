@@ -208,7 +208,7 @@ fn initialize_lines_pipeline(
 
 impl CanvasGlobalResources {
     pub fn register(cc: &eframe::CreationContext) {
-        let render_state = cc.render_state.as_ref().expect("WGPU enabled");
+        let render_state = cc.wgpu_render_state.as_ref().expect("WGPU enabled");
 
         let device = &render_state.device;
 
@@ -239,7 +239,7 @@ impl CanvasGlobalResources {
 
 impl Canvas {
     pub fn new(cc: &eframe::CreationContext) -> Self {
-        let render_state = cc.render_state.as_ref().expect("WGPU enabled");
+        let render_state = cc.wgpu_render_state.as_ref().expect("WGPU enabled");
         let mut rpass = render_state.egui_rpass.write();
 
         let global_resources: &mut CanvasGlobalResources =

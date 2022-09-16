@@ -12,23 +12,18 @@ log = "0.4"
 mcpnr-common = { path = "../mcpnr-common" }
 nalgebra = "0.31"
 quartz_nbt = { version = "0.2", features = [ "serde" ] }
-winit = "0.26.1"
+winit = "0.27"
 
 [dependencies.egui]
-version = "0.18"
+version = "0.19"
 
 [dependencies.egui-wgpu]
-version = "0.18"
+version = "0.19"
 
 [dependencies.eframe]
-version = "0.18"
+version = "0.19"
 default-features = false
 features = [ "default_fonts", "wgpu" ]
-
-[patch.crates-io]
-egui = { git = "https://github.com/emilk/egui", branch = "master" }
-egui-wgpu = { git = "https://github.com/emilk/egui", branch="master" }
-eframe = { git = "https://github.com/emilk/egui", branch = "master" }
 
 # native egui:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
