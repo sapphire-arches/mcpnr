@@ -312,7 +312,7 @@ impl Canvas {
     }
 
     fn render_canvas(&mut self, ui: &mut egui::Ui, cells: &PlaceableCells) -> egui::Response {
-        let (rect, response) =
+        let (render_rect, response) =
             ui.allocate_at_least(ui.available_size(), egui::Sense::click_and_drag());
 
         // Accessiblity properties (mostly just a stub, this is a purely visual component...)
@@ -343,8 +343,8 @@ impl Canvas {
         }
 
         // Compute the size in pixels
-        let pixel_width = rect.width() * ui.ctx().pixels_per_point();
-        let pixel_height = rect.height() * ui.ctx().pixels_per_point();
+        let pixel_width = render_rect.width() * ui.ctx().pixels_per_point();
+        let pixel_height = render_rect.height() * ui.ctx().pixels_per_point();
 
         //
         // Extract the rectangles we should render
@@ -366,6 +366,34 @@ impl Canvas {
                 .into(),
         };
 
+        // Compute the transform matrix based on the egui rectangle and a scale factor
+        let projection_view = na::Translation3::new(-self.center.x, -self.center.y, 0.0);
+        // The output of projection_view will be scaled by rect.width() and rect.height() from [-1,
+        // 1] on both axes by the viewport transform. Therefore internal units must be scaled by a
+        // factor of (2.0 / rect.width()) to get 1 unit = 1 pixel, and then multiplied by
+        // pixels_per_unit to get 1 unit = pixels_per_unit pixels
+        let projection_view = na::Scale3::new(
+            (-2.0 / pixel_width) * self.pixels_per_unit,
+            (2.0 / pixel_height) * self.pixels_per_unit,
+            1.0,
+        )
+        .to_homogeneous()
+            * projection_view.to_homogeneous();
+
+        self.render_cells(cells, ui, projection_view, render_rect, clip_rect);
+        self.render_signals(cells, ui, projection_view, render_rect, clip_rect);
+
+        response
+    }
+
+    fn render_cells(
+        &mut self,
+        cells: &PlaceableCells,
+        ui: &mut egui::Ui,
+        projection_view: na::Matrix4<f32>,
+        render_rect: egui::Rect,
+        clip_rect: egui::Rect,
+    ) {
         let mut nrects: u32 = 0;
         let mut rect_vertex_data: Vec<RectVertex> = Vec::new();
         let mut rect_indicies: Vec<RectIndexType> = Vec::new();
@@ -407,51 +435,10 @@ impl Canvas {
             }
         }
 
-        let mut nlines: u32 = 0;
-        let mut line_vertex_data: Vec<RectVertex> = Vec::new();
-
-        for signal in &cells.signals {
-            for (s, e) in signal
-                .connected_cells
-                .iter()
-                .map(|cell| {
-                    let cell = &cells.cells[*cell];
-                    (
-                        cell.x as f32 + cell.sx as f32 / 2.0,
-                        cell.z as f32 + cell.sz as f32 / 2.0,
-                    )
-                })
-                .tuple_windows()
-            {
-                if !clip_rect.contains(s.into()) && !clip_rect.contains(e.into()) {
-                    continue;
-                }
-
-                line_vertex_data.push(RectVertex { pos: s.into() });
-                line_vertex_data.push(RectVertex { pos: e.into() });
-
-                nlines += 1;
-            }
-        }
-
         // Early out: nothing to render
         if nrects == 0 {
-            return response;
+            return;
         }
-
-        // Compute the transform matrix based on the egui rectangle and a scale factor
-        let projection_view = na::Translation3::new(-self.center.x, -self.center.y, 0.0);
-        // The output of projection_view will be scaled by rect.width() and rect.height() from [-1,
-        // 1] on both axes by the viewport transform. Therefore internal units must be scaled by a
-        // factor of (2.0 / rect.width()) to get 1 unit = 1 pixel, and then multiplied by
-        // pixels_per_unit to get 1 unit = pixels_per_unit pixels
-        let projection_view = na::Scale3::new(
-            (-2.0 / pixel_width) * self.pixels_per_unit,
-            (2.0 / pixel_height) * self.pixels_per_unit,
-            1.0,
-        )
-        .to_homogeneous()
-            * projection_view.to_homogeneous();
 
         let mut rect_uniforms = RectangleUniforms {
             projection_view: [0.0; 16],
@@ -462,11 +449,6 @@ impl Canvas {
         for (i, f) in projection_view.as_slice().iter().enumerate() {
             rect_uniforms.projection_view[i] = *f;
         }
-
-        let line_uniforms = RectangleUniforms {
-            color: [1.0, 0.0, 0.0, 1.0],
-            ..rect_uniforms
-        };
 
         let id = self.id;
 
@@ -505,6 +487,93 @@ impl Canvas {
                     0,
                     bytemuck::cast_slice(&[rect_uniforms]),
                 );
+            })
+            .paint(move |_info, rpass, paint_callback_resources| {
+                let global_resources: &CanvasGlobalResources =
+                    paint_callback_resources.get().unwrap();
+
+                let local_resources = global_resources.canvases.get(&id).unwrap();
+
+                rpass.set_pipeline(&global_resources.rects_pipeline);
+                rpass.set_bind_group(0, &local_resources.rect_bind_group, &[]);
+                rpass.set_vertex_buffer(
+                    0,
+                    local_resources.rect_vertex_buffer.slice(
+                        ..(nrects as u64
+                            * VERTEX_PER_RECT
+                            * std::mem::size_of::<RectVertex>() as u64),
+                    ),
+                );
+                rpass.set_index_buffer(
+                    local_resources.rect_index_buffer.slice(
+                        ..(nrects as u64
+                            * INDEX_PER_RECT
+                            * std::mem::size_of::<RectIndexType>() as u64),
+                    ),
+                    RECT_INDEX_FORMAT,
+                );
+                rpass.draw_indexed(0..(nrects * INDEX_PER_RECT as u32), 0, 0..1);
+            });
+
+        ui.painter().add(egui::PaintCallback {
+            rect: render_rect,
+            callback: Arc::new(cb),
+        });
+    }
+
+    fn render_signals(
+        &mut self,
+        cells: &PlaceableCells,
+        ui: &mut egui::Ui,
+        projection_view: na::Matrix4<f32>,
+        render_rect: egui::Rect,
+        clip_rect: egui::Rect,
+    ) {
+        let mut nlines: u32 = 0;
+        let mut line_vertex_data: Vec<RectVertex> = Vec::new();
+
+        for signal in &cells.signals {
+            for (s, e) in signal
+                .connected_cells
+                .iter()
+                .map(|cell| {
+                    let cell = &cells.cells[*cell];
+                    (
+                        cell.x as f32 + cell.sx as f32 / 2.0,
+                        cell.z as f32 + cell.sz as f32 / 2.0,
+                    )
+                })
+                .tuple_windows()
+            {
+                if !clip_rect.contains(s.into()) && !clip_rect.contains(e.into()) {
+                    continue;
+                }
+
+                line_vertex_data.push(RectVertex { pos: s.into() });
+                line_vertex_data.push(RectVertex { pos: e.into() });
+
+                nlines += 1;
+            }
+        }
+
+        let mut line_uniforms = RectangleUniforms {
+            projection_view: [0.0; 16],
+            color: [1.0, 0.0, 0.0, 1.0],
+        };
+
+        assert_eq!(projection_view.as_slice().len(), 16);
+        for (i, f) in projection_view.as_slice().iter().enumerate() {
+            line_uniforms.projection_view[i] = *f;
+        }
+
+        let id = self.id;
+
+        let cb = egui_wgpu::CallbackFn::new()
+            .prepare(move |device, queue, paint_callback_resources| {
+                let global_resources: &mut CanvasGlobalResources =
+                    paint_callback_resources.get_mut().unwrap();
+
+                let mut local_resources = global_resources.canvases.get_mut(&id).unwrap();
 
                 let line_count: u64 = nlines.into();
                 if line_count > local_resources.line_count {
@@ -542,26 +611,6 @@ impl Canvas {
 
                 let local_resources = global_resources.canvases.get(&id).unwrap();
 
-                rpass.set_pipeline(&global_resources.rects_pipeline);
-                rpass.set_bind_group(0, &local_resources.rect_bind_group, &[]);
-                rpass.set_vertex_buffer(
-                    0,
-                    local_resources.rect_vertex_buffer.slice(
-                        ..(nrects as u64
-                            * VERTEX_PER_RECT
-                            * std::mem::size_of::<RectVertex>() as u64),
-                    ),
-                );
-                rpass.set_index_buffer(
-                    local_resources.rect_index_buffer.slice(
-                        ..(nrects as u64
-                            * INDEX_PER_RECT
-                            * std::mem::size_of::<RectIndexType>() as u64),
-                    ),
-                    RECT_INDEX_FORMAT,
-                );
-                rpass.draw_indexed(0..(nrects * INDEX_PER_RECT as u32), 0, 0..1);
-
                 rpass.set_pipeline(&global_resources.lines_pipeline);
                 rpass.set_bind_group(0, &local_resources.line_bind_group, &[]);
                 rpass.set_vertex_buffer(
@@ -576,11 +625,9 @@ impl Canvas {
             });
 
         ui.painter().add(egui::PaintCallback {
-            rect,
+            rect: render_rect,
             callback: Arc::new(cb),
         });
-
-        response
     }
 }
 
