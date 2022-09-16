@@ -556,6 +556,11 @@ impl Canvas {
             }
         }
 
+        // Early out for no rendering
+        if nlines == 0 {
+            return;
+        }
+
         let mut line_uniforms = RectangleUniforms {
             projection_view: [0.0; 16],
             color: [1.0, 0.0, 0.0, 1.0],
