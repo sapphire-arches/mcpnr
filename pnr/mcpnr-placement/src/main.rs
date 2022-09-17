@@ -1,18 +1,19 @@
 use anyhow::{anyhow, Context, Result};
 use clap::{Arg, Command};
-use itertools::Itertools;
 use mcpnr_common::prost::Message;
-use mcpnr_common::protos::mcpnr::{PlacedDesign, Position};
+use mcpnr_common::protos::mcpnr::PlacedDesign;
 use mcpnr_common::protos::yosys::pb::parameter::Value as YPValue;
 use mcpnr_common::protos::yosys::pb::{Design, Parameter};
-use placement_cell::{CellFactory, PlacementCell};
+use placement_cell::CellFactory;
+use placer::{Clique, DecompositionStrategy};
 use std::path::PathBuf;
 
-use crate::core::PlaceableCells;
+use crate::core::NetlistHypergraph;
 
 mod core;
 mod gui;
 mod placement_cell;
+pub mod placer;
 
 #[derive(Clone, Debug)]
 struct Config {
@@ -88,7 +89,7 @@ fn load_design(config: &Config) -> Result<Design> {
         .with_context(|| anyhow!("Failed to parse file {:?}", config.input_file))
 }
 
-fn load_cells(config: &Config, design: Design) -> Result<(PlaceableCells, String)> {
+fn load_cells(config: &Config, design: Design) -> Result<(NetlistHypergraph, String)> {
     let top_module = design
         .modules
         .into_values()
@@ -102,42 +103,17 @@ fn load_cells(config: &Config, design: Design) -> Result<(PlaceableCells, String
 
     let mut cell_factory = CellFactory::new(config.structure_directory.clone());
 
-    let cells = PlaceableCells::from_module(top_module, &mut cell_factory)
+    let cells = NetlistHypergraph::from_module(top_module, &mut cell_factory)
         .with_context(|| "Extract cells")?;
 
     Ok((cells, design.creator))
 }
 
-fn place_algorithm(config: &Config, cells: &mut PlaceableCells) {
-    // TODO: smart place
-    let mut cx = 0;
-    let mut cz = 4;
-    let mut row_max_z = 0;
-    let mut tier = 0;
+fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()> {
+    let mut strategy = Clique::new();
+    strategy.execute(cells)?;
 
-    for cell in cells.cells.iter_mut() {
-        if cell.pos_locked {
-            continue;
-        }
-        if cx + cell.sx > config.size_x {
-            // TODO: don't hard code region size
-            cz += row_max_z;
-            row_max_z = 0;
-            cx = 0;
-        }
-        if cz > config.size_z {
-            tier += 1;
-            cx = 0;
-            cz = 0;
-        }
-        cell.x = cx;
-        cell.z = cz;
-        cell.y = tier * 16;
-
-        cx += cell.sx;
-        row_max_z = std::cmp::max(cell.sz, row_max_z);
-    }
-    println!("Required tiers: {}", tier + 1);
+    Ok(())
 }
 
 fn place(config: &Config, design: Design) -> Result<PlacedDesign> {

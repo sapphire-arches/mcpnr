@@ -18,11 +18,27 @@ pub struct CellMetadata {
 pub struct Signal {
     /// Vector of indicies into `PlaceableCells::cells`
     pub connected_cells: Vec<usize>,
+
+    /// Number of cells in [`Signal::connected_cells`] that are moveable.
+    pub moveable_cells: usize,
 }
 
-impl CellMetadata {}
+impl Signal {
+    pub fn iter_mobile<'a>(
+        &'a self,
+        net: &'a NetlistHypergraph,
+    ) -> impl Iterator<Item = usize> + 'a {
+        self.connected_cells
+            .iter()
+            .filter(|idx| !net.cells[**idx].pos_locked)
+            .map(|x| *x)
+    }
+}
 
-pub struct PlaceableCells {
+/// Represents the netlist as a hypergraph. [`NetlistHypergraph::cells`] are the nodes,
+/// [`NetlistHypergraph::signals`] are the edges. Each [`Signal`] contains the list of cells it is
+/// connected to, as an index into [`NetlistHypergraph::cells`].
+pub struct NetlistHypergraph {
     /// The placer-internal metadata. Order must remain stable so we can zip it up with `metadata`
     /// later.
     pub cells: Vec<PlacementCell>,
@@ -32,7 +48,7 @@ pub struct PlaceableCells {
     pub net_names: Vec<Netname>,
 }
 
-impl PlaceableCells {
+impl NetlistHypergraph {
     pub fn from_module(m: Module, cell_factory: &mut CellFactory) -> Result<Self> {
         let mut cells = Vec::with_capacity(m.cell.len());
         let mut metadata = Vec::with_capacity(m.cell.len());
@@ -69,7 +85,10 @@ impl PlaceableCells {
 
         let signals = signals
             .into_iter()
-            .map(|(_, v)| Signal { connected_cells: v })
+            .map(|(_, v)| Signal {
+                moveable_cells: v.iter().filter(|idx| !cells[**idx].pos_locked).count(),
+                connected_cells: v,
+            })
             .collect();
 
         Ok(Self {

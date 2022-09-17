@@ -1,6 +1,4 @@
-use crate::{
-    core::PlaceableCells, load_cells, load_design, place, place_algorithm, run_placement, Config,
-};
+use crate::{core::NetlistHypergraph, load_cells, load_design, place_algorithm, Config};
 use anyhow::Result;
 use eframe::{App, CreationContext};
 
@@ -10,7 +8,7 @@ mod canvas;
 
 struct UIState {
     config: Config,
-    cells: PlaceableCells,
+    cells: NetlistHypergraph,
     creator: String,
 
     // UI state
@@ -19,7 +17,12 @@ struct UIState {
 }
 
 impl UIState {
-    fn new(config: Config, cells: PlaceableCells, creator: String, cc: &CreationContext) -> Self {
+    fn new(
+        config: Config,
+        cells: NetlistHypergraph,
+        creator: String,
+        cc: &CreationContext,
+    ) -> Self {
         CanvasGlobalResources::register(cc);
 
         Self {
@@ -36,7 +39,10 @@ impl App for UIState {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::SidePanel::right("debug_panel").show(ctx, |ui| {
             if ui.button("Run placement").clicked() {
-                place_algorithm(&self.config, &mut self.cells)
+                match place_algorithm(&self.config, &mut self.cells) {
+                    Ok(_) => {}
+                    Err(e) => log::error!("Placement failure: {:?}", e),
+                };
             }
 
             ui.collapsing("EGUI inspection", |ui| {

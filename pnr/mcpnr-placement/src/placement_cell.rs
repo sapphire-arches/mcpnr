@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use mcpnr_common::{minecraft_types::Structure, protos::yosys::pb::module::Cell, protos::CellExt};
+use nalgebra::Vector3;
 use std::{collections::HashMap, path::PathBuf};
 
 pub const XZ_EXPANSION: u32 = 2;
@@ -19,22 +20,38 @@ pub struct CellFactory {
 }
 
 pub struct PlacementCell {
-    pub x: u32,
-    pub y: u32,
-    pub z: u32,
-    pub sx: u32,
-    pub sy: u32,
-    pub sz: u32,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub sx: f32,
+    pub sy: f32,
+    pub sz: f32,
+    /// Whether the cell is locked in place (e.g. it's an IO macro)
+    ///
+    /// TODO: this should be removed, and NetlistHypergraph reworked so that cells are ordered
+    /// position-locked first
     pub pos_locked: bool,
 }
 
 impl PlacementCell {
     pub fn unexpanded_pos(&self) -> [u32; 3] {
         if self.pos_locked {
-            [self.x, self.y, self.z]
+            [self.x as u32, self.y as u32, self.z as u32]
         } else {
-            [self.x + XZ_EXPANSION, self.y, self.z + XZ_EXPANSION]
+            [
+                self.x as u32 + XZ_EXPANSION,
+                self.y as u32,
+                self.z as u32 + XZ_EXPANSION,
+            ]
         }
+    }
+
+    pub fn center_pos(&self) -> Vector3<f32> {
+        Vector3::new(
+            self.x as f32 + (self.sx as f32 / 2.0),
+            self.y as f32 + (self.sy as f32 / 2.0),
+            self.z as f32 + (self.sz as f32 / 2.0),
+        )
     }
 }
 
@@ -46,7 +63,10 @@ impl CellFactory {
         }
     }
 
-    pub(crate) fn load_structure(&mut self, structure_name: &str) -> Result<&PlacementStructureData> {
+    pub(crate) fn load_structure(
+        &mut self,
+        structure_name: &str,
+    ) -> Result<&PlacementStructureData> {
         if self.structure_cache.contains_key(structure_name) {
             self.structure_cache
                 .get(structure_name)
@@ -115,12 +135,12 @@ impl CellFactory {
         let (x, y, z) = get_cell_pos(cell)?;
         let nswitches = cell.get_param_i64_with_default("NSWITCH", 1)?;
         Ok(PlacementCell {
-            x,
-            y,
-            z,
-            sx: (nswitches as u32) * 2,
-            sy: 2,
-            sz: 4,
+            x: x as f32,
+            y: y as f32,
+            z: z as f32,
+            sx: (nswitches as f32) * 2.0,
+            sy: 2.0,
+            sz: 4.0,
             pos_locked: true,
         })
     }
@@ -129,12 +149,12 @@ impl CellFactory {
         let (x, y, z) = get_cell_pos(cell)?;
         let nlight = cell.get_param_i64_with_default("NLIGHT", 1)?;
         Ok(PlacementCell {
-            x,
-            y,
-            z,
-            sx: (nlight as u32) * 2,
-            sy: 2,
-            sz: 2,
+            x: x as f32,
+            y: y as f32,
+            z: z as f32,
+            sx: (nlight as f32) * 2.0,
+            sy: 2.0,
+            sz: 2.0,
             pos_locked: true,
         })
     }
@@ -143,12 +163,12 @@ impl CellFactory {
         let sd = self.load_structure(&cell.r#type)?;
 
         Ok(PlacementCell {
-            x: 0,
-            y: 0,
-            z: 0,
-            sx: sd.sx + (sd.sx % 2),
-            sy: sd.sy,
-            sz: sd.sz + (sd.sz % 2),
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            sx: (sd.sx + (sd.sx % 2)) as f32,
+            sy: (sd.sy) as f32,
+            sz: (sd.sz + (sd.sz % 2)) as f32,
             pos_locked: false,
         })
     }

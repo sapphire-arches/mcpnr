@@ -9,7 +9,7 @@ use egui::{Vec2, Widget, WidgetInfo};
 use itertools::Itertools;
 use nalgebra as na;
 
-use crate::core::PlaceableCells;
+use crate::core::NetlistHypergraph;
 
 /// Global render state used to cache pipelines
 pub struct CanvasGlobalResources {
@@ -90,7 +90,7 @@ pub struct Canvas {
 /// Ephermeral state, for use with `egui::Ui::add`
 pub struct CanvasWidget<'a> {
     canvas: &'a mut Canvas,
-    cells: &'a PlaceableCells,
+    cells: &'a NetlistHypergraph,
 }
 
 fn initialize_rects_pipeline(
@@ -311,7 +311,7 @@ impl Canvas {
         }
     }
 
-    fn render_canvas(&mut self, ui: &mut egui::Ui, cells: &PlaceableCells) -> egui::Response {
+    fn render_canvas(&mut self, ui: &mut egui::Ui, cells: &NetlistHypergraph) -> egui::Response {
         let (render_rect, response) =
             ui.allocate_at_least(ui.available_size(), egui::Sense::click_and_drag());
 
@@ -388,7 +388,7 @@ impl Canvas {
 
     fn render_cells(
         &mut self,
-        cells: &PlaceableCells,
+        cells: &NetlistHypergraph,
         ui: &mut egui::Ui,
         projection_view: na::Matrix4<f32>,
         render_rect: egui::Rect,
@@ -399,10 +399,10 @@ impl Canvas {
         let mut rect_indicies: Vec<RectIndexType> = Vec::new();
 
         for cell in &cells.cells {
-            let x = cell.x as f32;
-            let y = cell.z as f32;
-            let sx = cell.sx as f32;
-            let sy = cell.sz as f32;
+            let x = cell.x;
+            let y = cell.z;
+            let sx = cell.sx;
+            let sy = cell.sz;
 
             let cell_rect = egui::Rect {
                 min: (x, y).into(),
@@ -523,7 +523,7 @@ impl Canvas {
 
     fn render_signals(
         &mut self,
-        cells: &PlaceableCells,
+        cells: &NetlistHypergraph,
         ui: &mut egui::Ui,
         projection_view: na::Matrix4<f32>,
         render_rect: egui::Rect,
@@ -537,11 +537,8 @@ impl Canvas {
                 .connected_cells
                 .iter()
                 .map(|cell| {
-                    let cell = &cells.cells[*cell];
-                    (
-                        cell.x as f32 + cell.sx as f32 / 2.0,
-                        cell.z as f32 + cell.sz as f32 / 2.0,
-                    )
+                    let center = &cells.cells[*cell].center_pos();
+                    (center.x, center.z)
                 })
                 .tuple_windows()
             {
@@ -677,7 +674,7 @@ impl CanvasId {
 }
 
 impl<'a> CanvasWidget<'a> {
-    pub fn new(canvas: &'a mut Canvas, cells: &'a PlaceableCells) -> Self {
+    pub fn new(canvas: &'a mut Canvas, cells: &'a NetlistHypergraph) -> Self {
         Self { canvas, cells }
     }
 }
