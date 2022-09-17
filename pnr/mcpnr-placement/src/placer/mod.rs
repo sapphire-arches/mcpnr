@@ -21,11 +21,9 @@ mod test;
 ///    A x = -b
 /// $$
 pub struct AnalyticWirelengthProblem {
-    x_hessian: DMatrix<f32>,
+    hessian: DMatrix<f32>,
     x_vector: DVector<f32>,
-    y_hessian: DMatrix<f32>,
     y_vector: DVector<f32>,
-    z_hessian: DMatrix<f32>,
     z_vector: DVector<f32>,
 }
 
@@ -33,12 +31,10 @@ impl AnalyticWirelengthProblem {
     /// Create a new problem instance of the given size
     pub fn new(size: usize) -> Self {
         Self {
+            hessian: DMatrix::zeros(size, size),
             x_vector: DVector::zeros(size),
-            x_hessian: DMatrix::zeros(size, size),
             y_vector: DVector::zeros(size),
-            y_hessian: DMatrix::zeros(size, size),
             z_vector: DVector::zeros(size),
-            z_hessian: DMatrix::zeros(size, size),
         }
     }
 
@@ -55,17 +51,9 @@ impl AnalyticWirelengthProblem {
     ///  -w_{ij} to A_{i,j} and A_{j,i}
     /// $$
     pub fn cell_mobile_mobile(&mut self, i: usize, j: usize, weight: f32) {
-        self.x_hessian[(i, i)] += weight;
-        self.x_hessian[(i, j)] -= weight;
-        self.x_hessian[(j, i)] -= weight;
-
-        self.y_hessian[(i, i)] += weight;
-        self.y_hessian[(i, j)] -= weight;
-        self.y_hessian[(j, i)] -= weight;
-
-        self.z_hessian[(i, i)] += weight;
-        self.z_hessian[(i, j)] -= weight;
-        self.z_hessian[(j, i)] -= weight;
+        self.hessian[(i, i)] += weight;
+        self.hessian[(i, j)] -= weight;
+        self.hessian[(j, i)] -= weight;
     }
 
     /// A connection from a fixed position (e.g. a pinned cell or an anchor) to a mobile cell, in
@@ -82,9 +70,7 @@ impl AnalyticWirelengthProblem {
     ///  w_{ij} x_j to b_i
     /// $$
     pub fn cell_fixed_mobile(&mut self, mobile_index: usize, weight: f32, fixed_pos: Vector3<f32>) {
-        self.x_hessian[(mobile_index, mobile_index)] += weight;
-        self.y_hessian[(mobile_index, mobile_index)] += weight;
-        self.z_hessian[(mobile_index, mobile_index)] += weight;
+        self.hessian[(mobile_index, mobile_index)] += weight;
 
         self.x_vector[mobile_index] += weight * fixed_pos.x;
         self.y_vector[mobile_index] += weight * fixed_pos.y;
@@ -93,15 +79,14 @@ impl AnalyticWirelengthProblem {
 
     /// Solve the problem
     pub fn solve(mut self) -> Result<(DVector<f32>, DVector<f32>, DVector<f32>)> {
-        if self.x_hessian.lu().solve_mut(&mut self.x_vector) {
-            bail!("Failed to solve the X problem");
-        };
-        if !self.y_hessian.lu().solve_mut(&mut self.y_vector) {
-            bail!("Failed to solve the Y problem");
-        };
-        if !self.z_hessian.lu().solve_mut(&mut self.z_vector) {
-            bail!("Failed to solve the Z problem");
-        };
+        let decomp = self
+            .hessian
+            .cholesky()
+            .ok_or_else(|| anyhow!("The hessian has become non-hermitian"))?;
+
+        decomp.solve_mut(&mut self.x_vector);
+        decomp.solve_mut(&mut self.y_vector);
+        decomp.solve_mut(&mut self.z_vector);
 
         return Ok((self.x_vector, self.y_vector, self.z_vector));
     }

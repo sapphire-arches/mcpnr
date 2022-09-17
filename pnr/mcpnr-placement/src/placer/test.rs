@@ -136,9 +136,9 @@ fn simple_2fixed_1mobile() {
     let mut strategy = Clique::new();
     strategy.execute(&mut net).expect("Strategy success");
 
-    assert_eq!(net.cells[0].x, 1.0);
-    assert_eq!(net.cells[0].y, 1.0);
-    assert_eq!(net.cells[0].z, 1.0);
+    approx_eq!(net.cells[0].x, 1.0);
+    approx_eq!(net.cells[0].y, 1.0);
+    approx_eq!(net.cells[0].z, 1.0);
 }
 
 #[test]
