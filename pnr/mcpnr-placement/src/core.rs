@@ -40,9 +40,12 @@ impl Signal {
 /// connected to, as an index into [`NetlistHypergraph::cells`].
 pub struct NetlistHypergraph {
     /// The placer-internal metadata. Order must remain stable so we can zip it up with `metadata`
-    /// later.
+    /// later. This vector is ordered such that the first [`NetlistHypergraph::mobile_cell_count`]
+    /// cells are the mobile cells.
     pub cells: Vec<PlacementCell>,
     pub metadata: Vec<CellMetadata>,
+
+    pub mobile_cell_count: usize,
 
     pub signals: Vec<Signal>,
     pub net_names: Vec<Netname>,
@@ -50,11 +53,17 @@ pub struct NetlistHypergraph {
 
 impl NetlistHypergraph {
     /// Create a hypergraph with the given cell and signal information. This is mostly useful for
-    /// testing purposes.
-    pub fn test_new(cells: Vec<PlacementCell>, signals: Vec<Signal>) -> Self {
+    /// testing purposes. `cells` is assumed to be ordered as described by the documentation of
+    /// [`NetlistHypergraph::cells`].
+    pub fn test_new(
+        cells: Vec<PlacementCell>,
+        mobile_cell_count: usize,
+        signals: Vec<Signal>,
+    ) -> Self {
         Self {
             cells,
             metadata: vec![],
+            mobile_cell_count,
             signals,
             net_names: vec![],
         }
@@ -105,6 +114,7 @@ impl NetlistHypergraph {
         Ok(Self {
             cells,
             metadata,
+            mobile_cell_count: todo!(), // Need to implement sort
             signals,
             net_names: m.netname,
         })

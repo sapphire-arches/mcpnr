@@ -93,10 +93,7 @@ impl AnalyticWirelengthProblem {
 
     /// Solve the problem
     pub fn solve(mut self) -> Result<(DVector<f32>, DVector<f32>, DVector<f32>)> {
-        if !dbg!(self.x_hessian)
-            .lu()
-            .solve_mut(dbg!(&mut self.x_vector))
-        {
+        if self.x_hessian.lu().solve_mut(&mut self.x_vector) {
             bail!("Failed to solve the X problem");
         };
         if !self.y_hessian.lu().solve_mut(&mut self.y_vector) {
@@ -172,7 +169,8 @@ pub trait DecompositionStrategy {
         });
 
         // Construct the problem
-        let mut problem = AnalyticWirelengthProblem::new(net.cells.len() + self.extra_entries());
+        let mut problem =
+            AnalyticWirelengthProblem::new(net.mobile_cell_count + self.extra_entries());
 
         // placeholder weight
         let weight: f32 = 1.0;
@@ -225,7 +223,11 @@ pub trait DecompositionStrategy {
                                 cell_i.center_pos(),
                             )
                         } else {
-                            problem.cell_mobile_mobile(star_idx.0 as usize, i, weight);
+                            problem.cell_mobile_mobile(
+                                net.mobile_cell_count + star_idx.0 as usize,
+                                i,
+                                weight,
+                            );
                         }
                     }
                 }
@@ -249,14 +251,12 @@ pub trait DecompositionStrategy {
         // Actually solve the problem, and copy results back to the hypergraph
         let (x, y, z) = problem.solve().context("Final solve")?;
 
-        for (i, cell) in net.cells.iter_mut().enumerate() {
-            if cell.pos_locked {
-                continue;
-            }
+        for (i, cell) in net.cells.iter_mut().take(net.mobile_cell_count).enumerate() {
+            debug_assert!(!cell.pos_locked);
 
-            cell.x = x[i];
-            cell.y = y[i];
-            cell.z = z[i];
+            cell.x = x[i] - cell.sx / 2.0;
+            cell.y = y[i] - cell.sy / 2.0;
+            cell.z = z[i] - cell.sz / 2.0;
         }
 
         Ok(())

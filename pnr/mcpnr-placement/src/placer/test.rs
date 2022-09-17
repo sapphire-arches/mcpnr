@@ -3,19 +3,19 @@ use crate::placement_cell::PlacementCell;
 use std::collections::{hash_map::Entry, HashMap};
 
 fn make_netlist<'a>(
-    mobile_cells: impl Iterator<Item = &'a (&'static str, (u32, u32, u32), (u32, u32, u32))>,
+    mobile_cells: impl Iterator<Item = &'a (&'static str, (u32, u32, u32))>,
     fixed_cells: impl Iterator<Item = &'a (&'static str, (u32, u32, u32), (u32, u32, u32))>,
     signal_specs: impl Iterator<Item = &'a &'a [&'static str]>,
 ) -> NetlistHypergraph {
     let mut cells = Vec::new();
     let mut cell_indicies: HashMap<&'static str, usize> = Default::default();
 
-    for (name, (x, y, z), (sx, sy, sz)) in mobile_cells {
+    for (name, (sx, sy, sz)) in mobile_cells {
         let cell_idx = cells.len();
         cells.push(PlacementCell {
-            x: *x as f32,
-            y: *y as f32,
-            z: *z as f32,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
             sx: *sx as f32,
             sy: *sy as f32,
             sz: *sz as f32,
@@ -27,6 +27,8 @@ fn make_netlist<'a>(
             Entry::Vacant(v) => v.insert(cell_idx),
         };
     }
+
+    let mobile_cell_count = cells.len();
 
     for (name, (x, y, z), (sx, sy, sz)) in fixed_cells {
         let cell_idx = cells.len();
@@ -61,15 +63,13 @@ fn make_netlist<'a>(
         })
         .collect();
 
-    NetlistHypergraph::test_new(cells, signals)
+    NetlistHypergraph::test_new(cells, mobile_cell_count, signals)
 }
 
 macro_rules! netlist {
     (
         cells : [
-           $($name:ident =>
-                ($x:expr, $y:expr, $z:expr),
-                ($sx:expr, $sy:expr, $sz:expr);)*
+           $($name:ident => ($x:expr, $y:expr, $z:expr);)*
         ],
         fixed_cells : [
            $($f_name:ident =>
@@ -80,9 +80,9 @@ macro_rules! netlist {
             $([$($cell:ident),*]),*
         ]
     ) => {{
-        let cells: &[(&'static str, (u32, u32, u32), (u32, u32, u32))] = &[
+        let cells: &[(&'static str, (u32, u32, u32))] = &[
             $(
-                (stringify!($name), ($x, $y, $z), ($sx, $sy, $sz))
+                (stringify!($name), ($x, $y, $z))
             ),*
         ];
         let fixed_cells: &[(&'static str, (u32, u32, u32), (u32, u32, u32))] = &[
@@ -101,13 +101,27 @@ macro_rules! netlist {
     }};
 }
 
+macro_rules! approx_eq {
+    ($a:expr, $b:expr) => {approx_eq!($a, $b, 1e-6)} ;
+    ($a:expr, $b:expr, $eps:expr) => {
+        let a = $a;
+        let b = $b;
+        assert!((a - b).abs() <= $eps,
+           "{} = {:?} and {} = {:?} differ by more than {:?}",
+           stringify!($a), a,
+           stringify!($b), b,
+           $eps
+        )
+    };
+}
+
 #[test]
 fn simple_2fixed_1mobile() {
-    tracing_subscriber::fmt::init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let mut net = netlist![
         cells: [
-            mobile_0 => (0, 0, 0), (1, 1, 1);
+            mobile_0 => (1, 1, 1);
         ],
         fixed_cells: [
             fixed_0 => (0, 0, 0), (1, 1, 1);
@@ -125,4 +139,36 @@ fn simple_2fixed_1mobile() {
     assert_eq!(net.cells[0].x, 1.0);
     assert_eq!(net.cells[0].y, 1.0);
     assert_eq!(net.cells[0].z, 1.0);
+}
+
+#[test]
+fn simple_2fixed_2mobile() {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let mut net = netlist![
+        cells: [
+            mobile_0 => (1, 1, 1);
+            mobile_1 => (1, 1, 1);
+        ],
+        fixed_cells: [
+            fixed_0 => (0, 0, 0), (1, 1, 1);
+            fixed_1 => (3, 3, 3), (1, 1, 1);
+        ],
+        signals: [
+            [fixed_0, mobile_0],
+            [mobile_0, mobile_1],
+            [mobile_1, fixed_1]
+        ]
+    ];
+
+    let mut strategy = Clique::new();
+    strategy.execute(&mut net).expect("Strategy success");
+
+    approx_eq!(net.cells[0].x, 1.3);
+    approx_eq!(net.cells[0].y, 1.3);
+    approx_eq!(net.cells[0].z, 1.3);
+
+    approx_eq!(net.cells[1].x, 2.0);
+    approx_eq!(net.cells[1].y, 2.0);
+    approx_eq!(net.cells[1].z, 2.0);
 }
