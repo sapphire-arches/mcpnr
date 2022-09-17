@@ -49,6 +49,17 @@ pub struct NetlistHypergraph {
 }
 
 impl NetlistHypergraph {
+    /// Create a hypergraph with the given cell and signal information. This is mostly useful for
+    /// testing purposes.
+    pub fn test_new(cells: Vec<PlacementCell>, signals: Vec<Signal>) -> Self {
+        Self {
+            cells,
+            metadata: vec![],
+            signals,
+            net_names: vec![],
+        }
+    }
+
     pub fn from_module(m: Module, cell_factory: &mut CellFactory) -> Result<Self> {
         let mut cells = Vec::with_capacity(m.cell.len());
         let mut metadata = Vec::with_capacity(m.cell.len());

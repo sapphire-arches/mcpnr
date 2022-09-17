@@ -3,6 +3,9 @@ use nalgebra::{DMatrix, DVector, Vector3};
 use crate::core::{NetlistHypergraph, Signal};
 use anyhow::{anyhow, bail, Context, Result};
 
+#[cfg(test)]
+mod test;
+
 /// Problem statement for quadratic analytical placement, separated by axis. This is assuming the
 /// weighted quadratic error,
 ///
@@ -90,9 +93,18 @@ impl AnalyticWirelengthProblem {
 
     /// Solve the problem
     pub fn solve(mut self) -> Result<(DVector<f32>, DVector<f32>, DVector<f32>)> {
-        self.x_hessian.lu().solve_mut(&mut self.x_vector);
-        self.y_hessian.lu().solve_mut(&mut self.y_vector);
-        self.z_hessian.lu().solve_mut(&mut self.z_vector);
+        if !dbg!(self.x_hessian)
+            .lu()
+            .solve_mut(dbg!(&mut self.x_vector))
+        {
+            bail!("Failed to solve the X problem");
+        };
+        if !self.y_hessian.lu().solve_mut(&mut self.y_vector) {
+            bail!("Failed to solve the Y problem");
+        };
+        if !self.z_hessian.lu().solve_mut(&mut self.z_vector) {
+            bail!("Failed to solve the Z problem");
+        };
 
         return Ok((self.x_vector, self.y_vector, self.z_vector));
     }
@@ -189,10 +201,10 @@ pub trait DecompositionStrategy {
                                     // Both cells fixed, nothing to do
                                 }
                                 (true, false) => {
-                                    problem.cell_fixed_mobile(i, weight, cell_j.center_pos());
+                                    problem.cell_fixed_mobile(j, weight, cell_i.center_pos());
                                 }
                                 (false, true) => {
-                                    problem.cell_fixed_mobile(j, weight, cell_i.center_pos());
+                                    problem.cell_fixed_mobile(i, weight, cell_j.center_pos());
                                 }
                                 (false, false) => {
                                     problem.cell_mobile_mobile(i, j, weight);
@@ -241,17 +253,6 @@ pub trait DecompositionStrategy {
             if cell.pos_locked {
                 continue;
             }
-
-            log::info!(
-                "{:05} :{:?} {:?} {:?} -> {:?} {:?} {:?}",
-                i,
-                cell.x,
-                cell.y,
-                cell.z,
-                x[i],
-                y[i],
-                z[i]
-            );
 
             cell.x = x[i];
             cell.y = y[i];
