@@ -5,7 +5,7 @@ use std::{
 
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu::{self, Device};
-use egui::{Vec2, Widget, WidgetInfo};
+use egui::{Vec2, Widget, WidgetInfo, Key};
 use itertools::Itertools;
 use nalgebra as na;
 
@@ -323,7 +323,15 @@ impl Canvas {
         });
 
         if response.hovered() {
-            let delta = ui.input().scroll_delta.y;
+            let input = ui.input();
+
+            let delta = if input.key_pressed(Key::R) {
+                -1.0
+            } else if input.key_pressed(Key::F){
+                1.0
+            } else {
+                input.scroll_delta.y
+            };
 
             const SCALE: f32 = 0.5;
 
@@ -336,6 +344,21 @@ impl Canvas {
             };
 
             self.pixels_per_unit = f32::min(128.0, f32::max(1.0, self.pixels_per_unit * factor));
+
+            // Keyboard controls
+            const KEY_SCROLL: f32 = 64.0;
+            if input.key_pressed(Key::W) {
+                self.center.y += KEY_SCROLL / self.pixels_per_unit;
+            }
+            if input.key_pressed(Key::S) {
+                self.center.y -= KEY_SCROLL / self.pixels_per_unit;
+            }
+            if input.key_pressed(Key::A) {
+                self.center.x += KEY_SCROLL / self.pixels_per_unit;
+            }
+            if input.key_pressed(Key::D) {
+                self.center.x -= KEY_SCROLL / self.pixels_per_unit;
+            }
         }
 
         if response.dragged() {

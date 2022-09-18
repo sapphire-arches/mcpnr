@@ -3,7 +3,7 @@ use mcpnr_common::{minecraft_types::Structure, protos::yosys::pb::module::Cell, 
 use nalgebra::Vector3;
 use std::{collections::HashMap, path::PathBuf};
 
-pub const XZ_EXPANSION: u32 = 2;
+pub const XZ_EXPANSION: u32 = 0;
 
 pub(crate) struct PlacementStructureData {
     sx: u32,

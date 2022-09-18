@@ -37,6 +37,9 @@ impl UIState {
 
 impl App for UIState {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        egui::TopBottomPanel::top("title_panel").show(ctx, |ui| {
+            ui.label(&self.creator);
+        });
         egui::SidePanel::right("debug_panel").show(ctx, |ui| {
             if ui.button("Run placement").clicked() {
                 match place_algorithm(&self.config, &mut self.cells) {
