@@ -102,15 +102,20 @@ macro_rules! netlist {
 }
 
 macro_rules! approx_eq {
-    ($a:expr, $b:expr) => {approx_eq!($a, $b, 1e-6)} ;
+    ($a:expr, $b:expr) => {
+        approx_eq!($a, $b, 1e-6)
+    };
     ($a:expr, $b:expr, $eps:expr) => {
         let a = $a;
         let b = $b;
-        assert!((a - b).abs() <= $eps,
-           "{} = {:?} and {} = {:?} differ by more than {:?}",
-           stringify!($a), a,
-           stringify!($b), b,
-           $eps
+        assert!(
+            (a - b).abs() <= $eps,
+            "{} = {:?} and {} = {:?} differ by more than {:?}",
+            stringify!($a),
+            a,
+            stringify!($b),
+            b,
+            $eps
         )
     };
 }
@@ -164,11 +169,75 @@ fn simple_2fixed_2mobile() {
     let mut strategy = Clique::new();
     strategy.execute(&mut net).expect("Strategy success");
 
-    approx_eq!(net.cells[0].x, 1.3);
-    approx_eq!(net.cells[0].y, 1.3);
-    approx_eq!(net.cells[0].z, 1.3);
+    approx_eq!(net.cells[0].x, 1.0);
+    approx_eq!(net.cells[0].y, 1.0);
+    approx_eq!(net.cells[0].z, 1.0);
 
     approx_eq!(net.cells[1].x, 2.0);
     approx_eq!(net.cells[1].y, 2.0);
     approx_eq!(net.cells[1].z, 2.0);
+}
+
+#[test]
+fn three_clique() {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let mut net = netlist![
+        cells: [
+            mobile_0 => (1, 1, 1);
+            mobile_1 => (1, 1, 1);
+            mobile_2 => (1, 1, 1);
+        ],
+        fixed_cells: [
+            fixed_0 => (0, 0, 0), (1, 1, 1);
+            fixed_1 => (1, 1, 1), (1, 1, 1);
+        ],
+        signals: [
+            [fixed_0, mobile_0],
+            [fixed_1, mobile_0],
+            [mobile_0, mobile_1, mobile_2]
+        ]
+    ];
+
+    let mut strategy = Clique::new();
+    strategy.execute(&mut net).expect("Strategy success");
+
+    for i in 0..3 {
+        eprintln!("Check index {i}");
+        approx_eq!(net.cells[i].x, 0.5);
+        approx_eq!(net.cells[i].y, 0.5);
+        approx_eq!(net.cells[i].z, 0.5);
+    }
+}
+
+#[test]
+fn three_star() {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let mut net = netlist![
+        cells: [
+            mobile_0 => (1, 1, 1);
+            mobile_1 => (1, 1, 1);
+            mobile_2 => (1, 1, 1);
+        ],
+        fixed_cells: [
+            fixed_0 => (0, 0, 0), (1, 1, 1);
+            fixed_1 => (1, 1, 1), (1, 1, 1);
+        ],
+        signals: [
+            [fixed_0, mobile_0],
+            [fixed_1, mobile_0],
+            [mobile_0, mobile_1, mobile_2]
+        ]
+    ];
+
+    let mut strategy = MoveableStar::new();
+    strategy.execute(&mut net).expect("Strategy success");
+
+    for i in 0..3 {
+        eprintln!("Check index {i}");
+        approx_eq!(net.cells[i].x, 0.5);
+        approx_eq!(net.cells[i].y, 0.5);
+        approx_eq!(net.cells[i].z, 0.5);
+    }
 }

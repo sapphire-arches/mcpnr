@@ -19,6 +19,7 @@ pub struct CellFactory {
     structure_cache: HashMap<String, PlacementStructureData>,
 }
 
+#[derive(Debug)]
 pub struct PlacementCell {
     pub x: f32,
     pub y: f32,

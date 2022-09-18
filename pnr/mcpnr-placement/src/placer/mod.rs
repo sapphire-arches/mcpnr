@@ -52,6 +52,7 @@ impl AnalyticWirelengthProblem {
     /// $$
     pub fn cell_mobile_mobile(&mut self, i: usize, j: usize, weight: f32) {
         self.hessian[(i, i)] += weight;
+        self.hessian[(j, j)] += weight;
         self.hessian[(i, j)] -= weight;
         self.hessian[(j, i)] -= weight;
     }
@@ -173,7 +174,7 @@ pub trait DecompositionStrategy {
                     // Do nothing, the analysis claims all nets are fixed
                 }
                 NetStrategy::CliqueModel => {
-                    let weight = weight / (signal.moveable_cells as f32);
+                    let weight = weight / ((signal.connected_cells.len() - 1) as f32);
                     for (idx, &i) in signal.connected_cells.iter().enumerate() {
                         let cell_i = &net.cells[i];
                         for &j in signal.connected_cells.iter().skip(idx + 1) {
