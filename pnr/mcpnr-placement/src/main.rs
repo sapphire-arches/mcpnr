@@ -5,7 +5,7 @@ use mcpnr_common::protos::mcpnr::PlacedDesign;
 use mcpnr_common::protos::yosys::pb::parameter::Value as YPValue;
 use mcpnr_common::protos::yosys::pb::{Design, Parameter};
 use placement_cell::CellFactory;
-use placer::{Clique, DecompositionStrategy};
+use placer::analytical::{Clique, DecompositionStrategy};
 use std::path::PathBuf;
 
 use crate::core::NetlistHypergraph;
@@ -119,7 +119,7 @@ fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()>
 fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
     let (mut cells, creator) = load_cells(config, design).with_context(|| anyhow!("Load cells"))?;
 
-    place_algorithm(&config, &mut cells);
+    place_algorithm(&config, &mut cells).with_context(|| anyhow!("Initial analytical placement"))?;
 
     Ok(cells.build_output(creator))
 }

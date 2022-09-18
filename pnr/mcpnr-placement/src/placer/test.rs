@@ -1,8 +1,14 @@
-use super::*;
-use crate::placement_cell::PlacementCell;
+use crate::{
+    core::{NetlistHypergraph, Signal},
+    placement_cell::PlacementCell,
+};
 use std::collections::{hash_map::Entry, HashMap};
 
-fn make_netlist<'a>(
+/// Test utility function to build a netlist from a list of named cells and their sizes (or sizes +
+/// positions for the fixed cells). Cells will be added to the [`NetlistHypergraph`]'s cell list in
+/// the same order they're specified, which can be useful for assertions and touching up the cells
+/// when required.
+pub fn make_netlist<'a>(
     mobile_cells: impl Iterator<Item = &'a (&'static str, (u32, u32, u32))>,
     fixed_cells: impl Iterator<Item = &'a (&'static str, (u32, u32, u32), (u32, u32, u32))>,
     signal_specs: impl Iterator<Item = &'a &'a [&'static str]>,
@@ -66,6 +72,7 @@ fn make_netlist<'a>(
     NetlistHypergraph::test_new(cells, mobile_cell_count, signals)
 }
 
+#[macro_export]
 macro_rules! netlist {
     (
         cells : [
@@ -97,10 +104,11 @@ macro_rules! netlist {
             ] ),*
         ];
 
-        make_netlist(cells.into_iter(), fixed_cells.into_iter(), signals.into_iter())
+        $crate::placer::test::make_netlist(cells.into_iter(), fixed_cells.into_iter(), signals.into_iter())
     }};
 }
 
+#[macro_export]
 macro_rules! approx_eq {
     ($a:expr, $b:expr) => {
         approx_eq!($a, $b, 1e-6)
@@ -118,177 +126,4 @@ macro_rules! approx_eq {
             $eps
         )
     };
-}
-
-#[test]
-fn simple_2fixed_1mobile() {
-    let _ = tracing_subscriber::fmt::try_init();
-
-    let mut net = netlist![
-        cells: [
-            mobile_0 => (1, 1, 1);
-        ],
-        fixed_cells: [
-            fixed_0 => (0, 0, 0), (1, 1, 1);
-            fixed_1 => (2, 2, 2), (1, 1, 1);
-        ],
-        signals: [
-            [mobile_0, fixed_0],
-            [mobile_0, fixed_1]
-        ]
-    ];
-
-    let mut strategy = Clique::new();
-    strategy.execute(&mut net).expect("Strategy success");
-
-    approx_eq!(net.cells[0].x, 1.0);
-    approx_eq!(net.cells[0].y, 1.0);
-    approx_eq!(net.cells[0].z, 1.0);
-}
-
-#[test]
-fn simple_2fixed_2mobile() {
-    let _ = tracing_subscriber::fmt::try_init();
-
-    let mut net = netlist![
-        cells: [
-            mobile_0 => (1, 1, 1);
-            mobile_1 => (1, 1, 1);
-        ],
-        fixed_cells: [
-            fixed_0 => (0, 0, 0), (1, 1, 1);
-            fixed_1 => (3, 3, 3), (1, 1, 1);
-        ],
-        signals: [
-            [fixed_0, mobile_0],
-            [mobile_0, mobile_1],
-            [mobile_1, fixed_1]
-        ]
-    ];
-
-    let mut strategy = Clique::new();
-    strategy.execute(&mut net).expect("Strategy success");
-
-    approx_eq!(net.cells[0].x, 1.0);
-    approx_eq!(net.cells[0].y, 1.0);
-    approx_eq!(net.cells[0].z, 1.0);
-
-    approx_eq!(net.cells[1].x, 2.0);
-    approx_eq!(net.cells[1].y, 2.0);
-    approx_eq!(net.cells[1].z, 2.0);
-}
-
-#[test]
-fn three_clique() {
-    let _ = tracing_subscriber::fmt::try_init();
-
-    let mut net = netlist![
-        cells: [
-            mobile_0 => (1, 1, 1);
-            mobile_1 => (1, 1, 1);
-            mobile_2 => (1, 1, 1);
-        ],
-        fixed_cells: [
-            fixed_0 => (0, 0, 0), (1, 1, 1);
-            fixed_1 => (1, 1, 1), (1, 1, 1);
-        ],
-        signals: [
-            [fixed_0, mobile_0],
-            [fixed_1, mobile_0],
-            [mobile_0, mobile_1, mobile_2]
-        ]
-    ];
-
-    let mut strategy = Clique::new();
-    strategy.execute(&mut net).expect("Strategy success");
-
-    for i in 0..3 {
-        eprintln!("Check index {i}");
-        approx_eq!(net.cells[i].x, 0.5);
-        approx_eq!(net.cells[i].y, 0.5);
-        approx_eq!(net.cells[i].z, 0.5);
-    }
-}
-
-#[test]
-fn three_star() {
-    let _ = tracing_subscriber::fmt::try_init();
-
-    let mut net = netlist![
-        cells: [
-            mobile_0 => (1, 1, 1);
-            mobile_1 => (1, 1, 1);
-            mobile_2 => (1, 1, 1);
-        ],
-        fixed_cells: [
-            fixed_0 => (0, 0, 0), (1, 1, 1);
-            fixed_1 => (1, 1, 1), (1, 1, 1);
-        ],
-        signals: [
-            [fixed_0, mobile_0],
-            [fixed_1, mobile_0],
-            [mobile_0, mobile_1, mobile_2]
-        ]
-    ];
-
-    let mut strategy = MoveableStar::new();
-    strategy.execute(&mut net).expect("Strategy success");
-
-    for i in 0..3 {
-        eprintln!("Check index {i}");
-        approx_eq!(net.cells[i].x, 0.5);
-        approx_eq!(net.cells[i].y, 0.5);
-        approx_eq!(net.cells[i].z, 0.5);
-    }
-}
-
-#[test]
-fn three_anchor_by_net() {
-    let _ = tracing_subscriber::fmt::try_init();
-
-    let mut net = netlist![
-        cells: [
-            mobile_0 => (1, 1, 1);
-            mobile_1 => (1, 1, 1);
-            mobile_2 => (1, 1, 1);
-        ],
-        fixed_cells: [
-            fixed_0 => (0, 0, 0), (1, 1, 1);
-            fixed_1 => (2, 2, 2), (1, 1, 1);
-        ],
-        signals: [
-            // We need to bind all nets so all the cells end up at the same location, as the
-            // cell-cell link does not actually affect the AnchoredByNet strategy
-            [fixed_0, mobile_0],
-            [fixed_1, mobile_0],
-            [fixed_0, mobile_1],
-            [fixed_1, mobile_1],
-            [fixed_0, mobile_2],
-            [fixed_1, mobile_2],
-            [mobile_0, mobile_1, mobile_2]
-        ]
-    ];
-
-    // move the moveable cells to a position that will cause locking to have a significant effect
-    net.cells[0].x = 9.0;
-    net.cells[0].y = 9.0;
-    net.cells[0].z = 9.0;
-
-    net.cells[1].x = 8.9;
-    net.cells[1].y = 8.9;
-    net.cells[1].z = 8.9;
-
-    net.cells[2].x = 9.1;
-    net.cells[2].y = 9.1;
-    net.cells[2].z = 9.1;
-
-    let mut strategy = AnchoredByNet::new();
-    strategy.execute(&mut net).expect("Strategy success");
-
-    for i in 0..3 {
-        eprintln!("Check index {i}");
-        approx_eq!(net.cells[i].x, 2.1428574);
-        approx_eq!(net.cells[i].y, 2.1428574);
-        approx_eq!(net.cells[i].z, 2.1428574);
-    }
 }
