@@ -103,7 +103,7 @@ impl NetlistHypergraph {
             })
         }
 
-        let signals = signals
+        let mut signals: Vec<_> = signals
             .into_iter()
             .map(|(_, v)| Signal {
                 moveable_cells: v.iter().filter(|idx| !cells[**idx].pos_locked).count(),
@@ -111,10 +111,55 @@ impl NetlistHypergraph {
             })
             .collect();
 
+        // Swap all position locked cells to the end of the cell list.
+        let mut mobile_cell_count = 0;
+        let mut next_mobile_index = cells.len() - 1;
+        while cells[next_mobile_index].pos_locked {
+            next_mobile_index -= 1;
+        }
+        for i in 0..cells.len() {
+            if i >= next_mobile_index {
+                // When the forward iteration reaches the next mobile index, we know everything
+                // past the next_mobile_index is pos locked and can break
+                break;
+            }
+            if cells[i].pos_locked {
+                // This cell is locked early, swap the cell itself, its metadata, and rewrite all
+                // signals that reference it
+                cells.swap(i, next_mobile_index);
+                metadata.swap(i, next_mobile_index);
+
+                for signal in signals.iter_mut() {
+                    for cell_idx in signal.connected_cells.iter_mut() {
+                        if *cell_idx == i {
+                            *cell_idx = next_mobile_index;
+                        } else if *cell_idx == next_mobile_index {
+                            *cell_idx = i;
+                        }
+                    }
+                }
+
+                // Find the next mobile cell
+                while cells[next_mobile_index].pos_locked {
+                    next_mobile_index -= 1;
+                }
+            } else {
+                mobile_cell_count += 1;
+            }
+        }
+
+        // Cleanup: Skip to the end of the mobile cell block
+        while !cells[mobile_cell_count].pos_locked {
+            mobile_cell_count += 1;
+        }
+
+        assert!(cells[0..mobile_cell_count].iter().all(|cell| !cell.pos_locked));
+        assert!(cells[mobile_cell_count..].iter().all(|cell| cell.pos_locked));
+
         Ok(Self {
             cells,
             metadata,
-            mobile_cell_count: todo!(), // Need to implement sort
+            mobile_cell_count, // Need to implement sort
             signals,
             net_names: m.netname,
         })
