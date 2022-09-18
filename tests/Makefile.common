@@ -48,7 +48,8 @@ ifndef MODULE_SIZE_Z
 endif
 
 PLACEMENT_TOOL ?= $(MCPNR_TARGET_DIR)/mcpnr-placement
-PLACEMENT_TOOL_CMD ?= $(PLACEMENT_TOOL) --techlib $(SYNTH_MC_TECHLIB_DIR) \
+PLACEMENT_TOOL_CMD ?= $(PLACEMENT_TOOL) place \
+    --techlib $(SYNTH_MC_TECHLIB_DIR) \
     --size-x $(MODULE_SIZE_X) \
     --size-z $(MODULE_SIZE_Z)
 
