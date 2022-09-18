@@ -5,8 +5,9 @@ use mcpnr_common::protos::mcpnr::PlacedDesign;
 use mcpnr_common::protos::yosys::pb::parameter::Value as YPValue;
 use mcpnr_common::protos::yosys::pb::{Design, Parameter};
 use placement_cell::CellFactory;
-use placer::analytical::{Clique, DecompositionStrategy};
+use placer::analytical::{Clique, DecompositionStrategy, MoveableStar, ThresholdCrossover};
 use std::path::PathBuf;
+use tracing_subscriber::fmt::format::FmtSpan;
 
 use crate::core::NetlistHypergraph;
 
@@ -110,7 +111,7 @@ fn load_cells(config: &Config, design: Design) -> Result<(NetlistHypergraph, Str
 }
 
 fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()> {
-    let mut strategy = Clique::new();
+    let mut strategy = ThresholdCrossover::new(4, Clique::new(), MoveableStar::new());
     strategy.execute(cells)?;
 
     Ok(())
@@ -119,7 +120,8 @@ fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()>
 fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
     let (mut cells, creator) = load_cells(config, design).with_context(|| anyhow!("Load cells"))?;
 
-    place_algorithm(&config, &mut cells).with_context(|| anyhow!("Initial analytical placement"))?;
+    place_algorithm(&config, &mut cells)
+        .with_context(|| anyhow!("Initial analytical placement"))?;
 
     Ok(cells.build_output(creator))
 }
@@ -145,7 +147,21 @@ fn run_placement(config: &Config) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    {
+        use tracing_subscriber::{prelude::*, EnvFilter};
+
+        let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+            .compact();
+        let filter_layer = EnvFilter::try_from_default_env()
+            .or_else(|_| EnvFilter::try_new("info"))
+            .expect("Failed to initialize tracing env filter");
+
+        tracing_subscriber::registry()
+            .with(filter_layer)
+            .with(fmt_layer)
+            .init();
+    }
 
     let gui_command = add_common_args(Command::new("gui"))
         .help("Run a GUI for interactive debugging of the placer");
