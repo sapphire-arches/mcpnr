@@ -17,16 +17,19 @@ SERV_DIR=$1
 MY_DIR=$(dirname $0)
 
 SERV_FILES="
+serv_aligner.v
 serv_alu.v
 serv_bufreg.v
+serv_bufreg2.v
+serv_compdec.v
 serv_csr.v
 serv_ctrl.v
 serv_decode.v
 serv_immdec.v
 serv_mem_if.v
 serv_rf_if.v
-serv_rf_ram_if.v
 serv_rf_ram.v
+serv_rf_ram_if.v
 serv_rf_top.v
 serv_state.v
 serv_synth_wrapper.v
@@ -52,14 +55,17 @@ for f in ${SERV_FILES}
 do
   echo read_verilog ${SERV_DIR}/$f >> ${YOSYS_SCRIPT_FILE}
 done
+echo read_verilog ${MY_DIR}/mc_io.v >> ${YOSYS_SCRIPT_FILE}
 
-echo synth_mc -flatten -top serv_top -techlib ${MC_TECHLIB} >> ${YOSYS_SCRIPT_FILE}
+echo synth_mc -flatten -top mc_io_top -techlib ${MC_TECHLIB} >> ${YOSYS_SCRIPT_FILE}
 echo stat -liberty ${MC_TECHLIB}/minecraft.lib >> ${YOSYS_SCRIPT_FILE}
 
 echo write_protobuf ${BUILD_DIR}/${2}.yosys-design >> ${YOSYS_SCRIPT_FILE}
 
 yosys -s ${YOSYS_SCRIPT_FILE} | tee ${YOSYS_LOG_FILE}
 
-${MCPNR_RUST_TOOLS}/mcpnr-placement --techlib ${MC_TECHLIB} ${BUILD_DIR}/${2}.yosys-design ${BUILD_DIR}/${2}.mcpnr-placement
+cp ${BUILD_DIR}/${2}.yosys-design .
+
+${MCPNR_RUST_TOOLS}/mcpnr-placement place --techlib ${MC_TECHLIB} ${BUILD_DIR}/${2}.yosys-design ${BUILD_DIR}/${2}.mcpnr-placement
 ${MCPNR_RUST_TOOLS}/mcpnr-routing --tiers 3 --techlib ${MC_TECHLIB} ${BUILD_DIR}/${2}.mcpnr-placement ${BUILD_DIR}/${2}.mcpnr-routed
 python3 ${MY_DIR}/../../pnr/routed-to-world/convert.py ${BUILD_DIR}/${2}.mcpnr-routed "${HOME}/.minecraft/saves/Designs"
