@@ -15,6 +15,7 @@ pub struct CellMetadata {
     pub ty: String,
 }
 
+#[derive(Debug)]
 pub struct Signal {
     /// Vector of indicies into `PlaceableCells::cells`
     pub connected_cells: Vec<usize>,

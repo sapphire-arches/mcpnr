@@ -310,10 +310,18 @@ impl DecompositionStrategy for Clique {
     }
 }
 
-/// A strategy that considers every multipin net to be anchored by its CoG
-pub struct Anchored {}
+/// A strategy that considers every multipin net to be anchored by its CoG. This is in contrast to
+/// a potential [`AnchoredByCell`] strategy that would link each cell to an anchor at the CoG of
+/// the cell and all the cells connected to it by any net.
+pub struct AnchoredByNet {}
 
-impl DecompositionStrategy for Anchored {
+impl AnchoredByNet {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl DecompositionStrategy for AnchoredByNet {
     fn reset(&mut self) {
         // Nothing to do
     }
