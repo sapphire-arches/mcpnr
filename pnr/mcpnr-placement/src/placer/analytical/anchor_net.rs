@@ -65,26 +65,26 @@ mod test {
         ];
 
         // move the moveable cells to a position that will cause locking to have a significant effect
-        net.cells.x[0] = 9.0;
-        net.cells.y[0] = 9.0;
-        net.cells.z[0] = 9.0;
+        net.cells[0].x = 9.0;
+        net.cells[0].y = 9.0;
+        net.cells[0].z = 9.0;
 
-        net.cells.x[1] = 8.9;
-        net.cells.y[1] = 8.9;
-        net.cells.z[1] = 8.9;
+        net.cells[1].x = 8.9;
+        net.cells[1].y = 8.9;
+        net.cells[1].z = 8.9;
 
-        net.cells.x[2] = 9.1;
-        net.cells.y[2] = 9.1;
-        net.cells.z[2] = 9.1;
+        net.cells[2].x = 9.1;
+        net.cells[2].y = 9.1;
+        net.cells[2].z = 9.1;
 
         let mut strategy = AnchoredByNet::new();
         strategy.execute(&mut net).expect("Strategy success");
 
         for i in 0..3 {
             eprintln!("Check index {i}");
-            approx_eq!(net.cells.x[i], 2.1428574);
-            approx_eq!(net.cells.y[i], 2.1428574);
-            approx_eq!(net.cells.z[i], 2.1428574);
+            approx_eq!(net.cells[i].x, 2.1428574);
+            approx_eq!(net.cells[i].y, 2.1428574);
+            approx_eq!(net.cells[i].z, 2.1428574);
         }
     }
 }

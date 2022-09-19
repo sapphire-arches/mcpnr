@@ -68,9 +68,9 @@ mod test {
 
         for i in 0..3 {
             eprintln!("Check index {i}");
-            approx_eq!(net.cells.x[i], 0.5);
-            approx_eq!(net.cells.y[i], 0.5);
-            approx_eq!(net.cells.z[i], 0.5);
+            approx_eq!(net.cells[i].x, 0.5);
+            approx_eq!(net.cells[i].y, 0.5);
+            approx_eq!(net.cells[i].z, 0.5);
         }
     }
 }

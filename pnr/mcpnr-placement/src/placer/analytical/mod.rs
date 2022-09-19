@@ -89,7 +89,8 @@ impl AnalyticWirelengthProblem {
 
     /// Solve the problem
     pub fn solve(mut self) -> Result<(DVector<f32>, DVector<f32>, DVector<f32>)> {
-        let _span = tracing::info_span!("problem_solve", size = self.hessian.shape().0).entered();
+        let _span = tracing::info_span!("problem_solve", size = self.hessian.shape().0)
+            .entered();
 
         let decomp = tracing::info_span!("invert_hessian").in_scope(|| {
             self.hessian
@@ -199,24 +200,19 @@ pub trait DecompositionStrategy {
                     NetStrategy::CliqueModel => {
                         let weight = weight / ((signal.connected_cells.len() - 1) as f32);
                         for (idx, &i) in signal.connected_cells.iter().enumerate() {
+                            let cell_i = &net.cells[i];
                             for &j in signal.connected_cells.iter().skip(idx + 1) {
-                                match (net.is_locked(i), net.is_locked(j)) {
+                                let cell_j = &net.cells[j];
+
+                                match (cell_i.pos_locked, cell_j.pos_locked) {
                                     (true, true) => {
                                         // Both cells fixed, nothing to do
                                     }
                                     (true, false) => {
-                                        problem.cell_fixed_mobile(
-                                            j,
-                                            weight,
-                                            net.cells.center_pos(i),
-                                        );
+                                        problem.cell_fixed_mobile(j, weight, cell_i.center_pos());
                                     }
                                     (false, true) => {
-                                        problem.cell_fixed_mobile(
-                                            i,
-                                            weight,
-                                            net.cells.center_pos(j),
-                                        );
+                                        problem.cell_fixed_mobile(i, weight, cell_j.center_pos());
                                     }
                                     (false, false) => {
                                         problem.cell_mobile_mobile(i, j, weight);
@@ -228,11 +224,13 @@ pub trait DecompositionStrategy {
                     NetStrategy::StarModel { star_idx } => {
                         let weight = weight / (signal.moveable_cells as f32);
                         for &i in signal.connected_cells.iter() {
-                            if net.is_locked(i) {
+                            let cell_i = &net.cells[i];
+
+                            if cell_i.pos_locked {
                                 problem.cell_fixed_mobile(
                                     star_idx.0 as usize,
                                     weight,
-                                    net.cells.center_pos(i),
+                                    cell_i.center_pos(),
                                 )
                             } else {
                                 problem.cell_mobile_mobile(
@@ -247,7 +245,7 @@ pub trait DecompositionStrategy {
                         let cog: Vector3<f32> = signal
                             .connected_cells
                             .iter()
-                            .map(|i| net.cells.center_pos(*i))
+                            .map(|i| net.cells[*i].center_pos())
                             .fold(Vector3::zeros(), |a, b| a + b)
                             / (signal.connected_cells.len() as f32);
 
@@ -265,14 +263,12 @@ pub trait DecompositionStrategy {
         let (x, y, z) = problem.solve().context("Final solve")?;
 
         tracing::info_span!("writeback").in_scope(|| {
-            for i in 0..net.mobile_cell_count {
-                net.cells.x[i] = x[i] - net.cells.sx[i] / 2.0;
-            }
-            for i in 0..net.mobile_cell_count {
-                net.cells.y[i] = y[i] - net.cells.sy[i] / 2.0;
-            }
-            for i in 0..net.mobile_cell_count {
-                net.cells.z[i] = z[i] - net.cells.sz[i] / 2.0;
+            for (i, cell) in net.cells.iter_mut().take(net.mobile_cell_count).enumerate() {
+                debug_assert!(!cell.pos_locked);
+
+                cell.x = x[i] - cell.sx / 2.0;
+                cell.y = y[i] - cell.sy / 2.0;
+                cell.z = z[i] - cell.sz / 2.0;
             }
         });
 

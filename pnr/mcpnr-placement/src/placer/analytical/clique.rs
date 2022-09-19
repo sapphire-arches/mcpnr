@@ -56,9 +56,9 @@ mod test {
         let mut strategy = Clique::new();
         strategy.execute(&mut net).expect("Strategy success");
 
-        approx_eq!(net.cells.x[0], 1.0);
-        approx_eq!(net.cells.y[0], 1.0);
-        approx_eq!(net.cells.z[0], 1.0);
+        approx_eq!(net.cells[0].x, 1.0);
+        approx_eq!(net.cells[0].y, 1.0);
+        approx_eq!(net.cells[0].z, 1.0);
     }
 
     #[test]
@@ -84,13 +84,13 @@ mod test {
         let mut strategy = Clique::new();
         strategy.execute(&mut net).expect("Strategy success");
 
-        approx_eq!(net.cells.x[0], 1.0);
-        approx_eq!(net.cells.y[0], 1.0);
-        approx_eq!(net.cells.z[0], 1.0);
+        approx_eq!(net.cells[0].x, 1.0);
+        approx_eq!(net.cells[0].y, 1.0);
+        approx_eq!(net.cells[0].z, 1.0);
 
-        approx_eq!(net.cells.x[1], 2.0);
-        approx_eq!(net.cells.y[1], 2.0);
-        approx_eq!(net.cells.z[1], 2.0);
+        approx_eq!(net.cells[1].x, 2.0);
+        approx_eq!(net.cells[1].y, 2.0);
+        approx_eq!(net.cells[1].z, 2.0);
     }
 
     #[test]
@@ -119,9 +119,9 @@ mod test {
 
         for i in 0..3 {
             eprintln!("Check index {i}");
-            approx_eq!(net.cells.x[i], 0.5);
-            approx_eq!(net.cells.y[i], 0.5);
-            approx_eq!(net.cells.z[i], 0.5);
+            approx_eq!(net.cells[i].x, 0.5);
+            approx_eq!(net.cells[i].y, 0.5);
+            approx_eq!(net.cells[i].z, 0.5);
         }
     }
 }
