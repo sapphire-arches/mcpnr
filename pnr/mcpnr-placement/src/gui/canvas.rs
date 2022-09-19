@@ -5,7 +5,7 @@ use std::{
 
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu::{self, Device};
-use egui::{Vec2, Widget, WidgetInfo, Key};
+use egui::{Key, Vec2, Widget, WidgetInfo};
 use itertools::Itertools;
 use nalgebra as na;
 
@@ -327,7 +327,7 @@ impl Canvas {
 
             let delta = if input.key_pressed(Key::R) {
                 -1.0
-            } else if input.key_pressed(Key::F){
+            } else if input.key_pressed(Key::F) {
                 1.0
             } else {
                 input.scroll_delta.y
@@ -411,7 +411,7 @@ impl Canvas {
 
     fn render_cells(
         &mut self,
-        cells: &NetlistHypergraph,
+        net: &NetlistHypergraph,
         ui: &mut egui::Ui,
         projection_view: na::Matrix4<f32>,
         render_rect: egui::Rect,
@@ -421,11 +421,11 @@ impl Canvas {
         let mut rect_vertex_data: Vec<RectVertex> = Vec::new();
         let mut rect_indicies: Vec<RectIndexType> = Vec::new();
 
-        for cell in &cells.cells {
-            let x = cell.x;
-            let y = cell.z;
-            let sx = cell.sx;
-            let sy = cell.sz;
+        for cell in 0..(net.cells.len()) {
+            let x = net.cells.x[cell];
+            let y = net.cells.z[cell];
+            let sx = net.cells.sx[cell];
+            let sy = net.cells.sz[cell];
 
             let cell_rect = egui::Rect {
                 min: (x, y).into(),
@@ -546,7 +546,7 @@ impl Canvas {
 
     fn render_signals(
         &mut self,
-        cells: &NetlistHypergraph,
+        net: &NetlistHypergraph,
         ui: &mut egui::Ui,
         projection_view: na::Matrix4<f32>,
         render_rect: egui::Rect,
@@ -555,12 +555,12 @@ impl Canvas {
         let mut nlines: u32 = 0;
         let mut line_vertex_data: Vec<RectVertex> = Vec::new();
 
-        for signal in &cells.signals {
+        for signal in &net.signals {
             for (s, e) in signal
                 .connected_cells
                 .iter()
                 .map(|cell| {
-                    let center = &cells.cells[*cell].center_pos();
+                    let center = net.cells.center_pos(*cell);
                     (center.x, center.z)
                 })
                 .tuple_windows()
