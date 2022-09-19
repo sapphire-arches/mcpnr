@@ -67,6 +67,9 @@
               name = "mcpnr-devel-shell";
 
               buildInputs = with pkgs; [
+                # Performance testing
+                hyperfine
+
                 # For formatting Nix expressions
                 nixpkgs-fmt
 
