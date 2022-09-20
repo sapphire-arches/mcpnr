@@ -5,6 +5,10 @@ use super::{DecompositionStrategy, NetStrategy};
 /// A strategy that considers every multipin net to be anchored by its CoG. This is in contrast to
 /// a potential [`AnchoredByCell`] strategy that would link each cell to an anchor at the CoG of
 /// the cell and all the cells connected to it by any net.
+///
+/// TODO: we can reuse the hessian matrix between solves when using this solution strategy since
+/// the hessian itself depends only on the topology of the problem, not the location of the cells
+/// or the anchors
 pub struct AnchoredByNet {}
 
 impl AnchoredByNet {

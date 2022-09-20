@@ -3,8 +3,9 @@
 , pkg-config
 , protobuf
 
-, freetype
 , fontconfig
+, freetype
+, lapack, blas, gfortran
 , mcpnr-rust-platform
 , vulkan-loader
 , xorg
@@ -26,11 +27,13 @@ mcpnr-rust-platform.buildRustPackage rec {
     cmake
     pkg-config
     protobuf
+    gfortran
   ];
 
   buildInputs = [
     fontconfig
     freetype
+    lapack blas
     vulkan-loader
     xorg.libX11
     xorg.libXcursor

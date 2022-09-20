@@ -10,7 +10,12 @@ clap = "3.1.5"
 itertools = "0.10"
 log = "0.4"
 mcpnr-common = { path = "../mcpnr-common" }
+# this is a stupid situation where we use nalgebra for graphics work and
+# ndarray for the actual solve. Eventually I should remove this but writting
+# the CG code in ndarray is annoying.
 nalgebra = "0.31"
+ndarray = "0.15"
+ndarray-linalg = { version = "0.15", features = ["netlib-system"]}
 quartz_nbt = { version = "0.2", features = [ "serde" ] }
 tracing = "0.1"
 winit = "0.27"

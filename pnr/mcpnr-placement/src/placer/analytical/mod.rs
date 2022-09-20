@@ -1,6 +1,8 @@
 //! Collection of analytical solvers
 use anyhow::{anyhow, Context, Result};
-use nalgebra::{DMatrix, DVector, Vector3};
+use nalgebra::Vector3;
+use ndarray::{Array1, Array2};
+use ndarray_linalg::{CholeskyFactorized, CholeskyInplace, SolveC, UPLO};
 
 use crate::core::{NetlistHypergraph, Signal};
 
@@ -30,20 +32,20 @@ pub use threshold_crossover::ThresholdCrossover;
 ///    A x = -b
 /// $$
 pub struct AnalyticWirelengthProblem {
-    hessian: DMatrix<f32>,
-    x_vector: DVector<f32>,
-    y_vector: DVector<f32>,
-    z_vector: DVector<f32>,
+    hessian: Array2<f32>,
+    x_vector: Array1<f32>,
+    y_vector: Array1<f32>,
+    z_vector: Array1<f32>,
 }
 
 impl AnalyticWirelengthProblem {
     /// Create a new problem instance of the given size
     pub fn new(size: usize) -> Self {
         Self {
-            hessian: DMatrix::zeros(size, size),
-            x_vector: DVector::zeros(size),
-            y_vector: DVector::zeros(size),
-            z_vector: DVector::zeros(size),
+            hessian: Array2::zeros((size, size)),
+            x_vector: Array1::zeros(size),
+            y_vector: Array1::zeros(size),
+            z_vector: Array1::zeros(size),
         }
     }
 
@@ -88,25 +90,41 @@ impl AnalyticWirelengthProblem {
     }
 
     /// Solve the problem
-    pub fn solve(mut self) -> Result<(DVector<f32>, DVector<f32>, DVector<f32>)> {
-        let _span = tracing::info_span!("problem_solve", size = self.hessian.shape().0)
-            .entered();
+    pub fn solve(mut self) -> Result<(Array1<f32>, Array1<f32>, Array1<f32>)> {
+        let _span = tracing::info_span!("problem_solve", size = self.hessian.shape()[0]).entered();
 
-        let decomp = tracing::info_span!("invert_hessian").in_scope(|| {
+        for i in 0 .. self.hessian.shape()[0] {
+            for j in i .. self.hessian.shape()[0] {
+                assert!(self.hessian[(i, j)] == self.hessian[(j, i)]);
+            }
+        }
+
+        let decomp = tracing::info_span!("invert_hessian").in_scope(|| -> Result<_> {
             self.hessian
-                .cholesky()
-                .ok_or_else(|| anyhow!("The hessian has become non-hermitian"))
+                .cholesky_inplace(UPLO::Lower)
+                .with_context(|| anyhow!("The hessian has become non-hermitian"))?;
+
+            Ok(CholeskyFactorized {
+                factor: self.hessian,
+                uplo: UPLO::Lower,
+            })
         })?;
 
         tracing::info_span!("solve_x").in_scope(|| {
-            decomp.solve_mut(&mut self.x_vector);
-        });
+            decomp
+                .solvec_inplace(&mut self.x_vector)
+                .with_context(|| anyhow!("Solve failed for X"))
+        })?;
         tracing::info_span!("solve_y").in_scope(|| {
-            decomp.solve_mut(&mut self.y_vector);
-        });
+            decomp
+                .solvec_inplace(&mut self.y_vector)
+                .with_context(|| anyhow!("Solve failed for Y"))
+        })?;
         tracing::info_span!("solve_z").in_scope(|| {
-            decomp.solve_mut(&mut self.z_vector);
-        });
+            decomp
+                .solvec_inplace(&mut self.z_vector)
+                .with_context(|| anyhow!("Solve failed for Z"))
+        })?;
 
         return Ok((self.x_vector, self.y_vector, self.z_vector));
     }
