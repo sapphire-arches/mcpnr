@@ -38,9 +38,11 @@ impl DecompositionStrategy for MoveableStar {
 
 #[cfg(test)]
 mod test {
+    use approx::assert_relative_eq;
+
     use super::MoveableStar;
 
-    use crate::{approx_eq, netlist, placer::analytical::DecompositionStrategy};
+    use crate::{netlist, placer::analytical::DecompositionStrategy};
 
     #[test]
     fn three_star() {
@@ -68,9 +70,9 @@ mod test {
 
         for i in 0..3 {
             eprintln!("Check index {i}");
-            approx_eq!(net.cells[i].x, 0.5);
-            approx_eq!(net.cells[i].y, 0.5);
-            approx_eq!(net.cells[i].z, 0.5);
+            assert_relative_eq!(net.cells[i].x, 0.5, epsilon = 1e-6);
+            assert_relative_eq!(net.cells[i].y, 0.5, epsilon = 1e-6);
+            assert_relative_eq!(net.cells[i].z, 0.5, epsilon = 1e-6);
         }
     }
 }

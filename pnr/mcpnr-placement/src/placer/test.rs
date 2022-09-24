@@ -107,23 +107,3 @@ macro_rules! netlist {
         $crate::placer::test::make_netlist(cells.into_iter(), fixed_cells.into_iter(), signals.into_iter())
     }};
 }
-
-#[macro_export]
-macro_rules! approx_eq {
-    ($a:expr, $b:expr) => {
-        approx_eq!($a, $b, 1e-6)
-    };
-    ($a:expr, $b:expr, $eps:expr) => {
-        let a = $a;
-        let b = $b;
-        assert!(
-            (a - b).abs() <= $eps,
-            "{} ({:?}) and {} ({:?}) differ by more than {:?}",
-            stringify!($a),
-            a,
-            stringify!($b),
-            b,
-            $eps
-        )
-    };
-}

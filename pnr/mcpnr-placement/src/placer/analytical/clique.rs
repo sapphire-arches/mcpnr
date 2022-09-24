@@ -31,9 +31,11 @@ impl DecompositionStrategy for Clique {
 
 #[cfg(test)]
 mod test {
+    use approx::assert_relative_eq;
+
     use super::Clique;
 
-    use crate::{approx_eq, netlist, placer::analytical::DecompositionStrategy};
+    use crate::{netlist, placer::analytical::DecompositionStrategy};
 
     #[test]
     fn simple_2fixed_1mobile() {
@@ -56,9 +58,9 @@ mod test {
         let mut strategy = Clique::new();
         strategy.execute(&mut net).expect("Strategy success");
 
-        approx_eq!(net.cells[0].x, 1.0);
-        approx_eq!(net.cells[0].y, 1.0);
-        approx_eq!(net.cells[0].z, 1.0);
+        assert_relative_eq!(net.cells[0].x, 1.0, epsilon = 1e-6);
+        assert_relative_eq!(net.cells[0].y, 1.0, epsilon = 1e-6);
+        assert_relative_eq!(net.cells[0].z, 1.0, epsilon = 1e-6);
     }
 
     #[test]
@@ -84,13 +86,13 @@ mod test {
         let mut strategy = Clique::new();
         strategy.execute(&mut net).expect("Strategy success");
 
-        approx_eq!(net.cells[0].x, 1.0);
-        approx_eq!(net.cells[0].y, 1.0);
-        approx_eq!(net.cells[0].z, 1.0);
+        assert_relative_eq!(net.cells[0].x, 1.0, epsilon = 1e-6);
+        assert_relative_eq!(net.cells[0].y, 1.0, epsilon = 1e-6);
+        assert_relative_eq!(net.cells[0].z, 1.0, epsilon = 1e-6);
 
-        approx_eq!(net.cells[1].x, 2.0);
-        approx_eq!(net.cells[1].y, 2.0);
-        approx_eq!(net.cells[1].z, 2.0);
+        assert_relative_eq!(net.cells[1].x, 2.0, epsilon = 1e-6);
+        assert_relative_eq!(net.cells[1].y, 2.0, epsilon = 1e-6);
+        assert_relative_eq!(net.cells[1].z, 2.0, epsilon = 1e-6);
     }
 
     #[test]
@@ -119,9 +121,9 @@ mod test {
 
         for i in 0..3 {
             eprintln!("Check index {i}");
-            approx_eq!(net.cells[i].x, 0.5);
-            approx_eq!(net.cells[i].y, 0.5);
-            approx_eq!(net.cells[i].z, 0.5);
+            assert_relative_eq!(net.cells[i].x, 0.5, epsilon = 1e-6);
+            assert_relative_eq!(net.cells[i].y, 0.5, epsilon = 1e-6);
+            assert_relative_eq!(net.cells[i].z, 0.5, epsilon = 1e-6);
         }
     }
 }

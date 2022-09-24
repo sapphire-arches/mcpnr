@@ -37,9 +37,11 @@ impl DecompositionStrategy for AnchoredByNet {
 
 #[cfg(test)]
 mod test {
+    use approx::assert_relative_eq;
+
     use super::AnchoredByNet;
 
-    use crate::{approx_eq, netlist, placer::analytical::DecompositionStrategy};
+    use crate::{netlist, placer::analytical::DecompositionStrategy};
 
     #[test]
     fn three_anchor_by_net() {
@@ -86,9 +88,9 @@ mod test {
 
         for i in 0..3 {
             eprintln!("Check index {i}");
-            approx_eq!(net.cells[i].x, 2.1428574);
-            approx_eq!(net.cells[i].y, 2.1428574);
-            approx_eq!(net.cells[i].z, 2.1428574);
+            assert_relative_eq!(net.cells[i].x, 2.1428574, epsilon = 1e-9);
+            assert_relative_eq!(net.cells[i].y, 2.1428574, epsilon = 1e-9);
+            assert_relative_eq!(net.cells[i].z, 2.1428574, epsilon = 1e-9);
         }
     }
 }
