@@ -1231,6 +1231,7 @@ name = "mcpnr-placement"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "approx 0.5.1",
  "bytemuck",
  "clap",
  "console_error_panic_hook",

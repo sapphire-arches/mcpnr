@@ -4,4 +4,5 @@
 mod test;
 
 pub mod analytical;
+pub mod diffusion;
 
