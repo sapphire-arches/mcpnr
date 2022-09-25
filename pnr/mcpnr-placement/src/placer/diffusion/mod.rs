@@ -79,20 +79,17 @@ impl DiffusionPlacer {
             let region_y_end = cell_y_end as usize / self.region_size;
             let region_z_end = cell_z_end as usize / self.region_size;
 
-            for region_x in region_x_start..=region_x_end {
-                dbg!(region_x);
-                let span_x = advance_coord(&mut cell_x, cell_x_end, region_x, self.region_size);
+            cell_z = cell_z_start;
+            for region_z in region_z_start..=region_z_end {
+                let span_z = advance_coord(&mut cell_z, cell_z_end, region_z, self.region_size);
                 cell_y = cell_y_start;
                 for region_y in region_y_start..=region_y_end {
-                    dbg!(region_y);
                     let span_y = advance_coord(&mut cell_y, cell_y_end, region_y, self.region_size);
-                    cell_z = cell_z_start;
-                    for region_z in region_z_start..=region_z_end {
-                        dbg!(region_z);
-                        let span_z =
-                            advance_coord(&mut cell_z, cell_z_end, region_z, self.region_size);
+                    cell_x = cell_x_start;
+                    for region_x in region_x_start..=region_x_end {
+                        let span_x =
+                            advance_coord(&mut cell_x, cell_x_end, region_x, self.region_size);
 
-                        // TODO: double-check that the iteration order here is the Good One
                         let coord = (region_x, region_y, region_z);
                         dbg!(coord, span_x, span_y, span_z);
                         self.density[(coord)] += span_x * span_y * span_z;
