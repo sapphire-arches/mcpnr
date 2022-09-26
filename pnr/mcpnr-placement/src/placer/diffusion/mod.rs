@@ -1,6 +1,6 @@
 use std::iter::FusedIterator;
 
-use ndarray::Array3;
+use ndarray::{s, Array3, Axis, Zip};
 
 use crate::core::NetlistHypergraph;
 
@@ -97,6 +97,74 @@ impl DiffusionPlacer {
                 }
             }
         }
+    }
+
+    /// Step the density forward in time.
+    ///
+    /// Uses the "forward-time centered space" scheme, as recommended by the "Diffusion-Based Placement
+    /// Migration" paper.
+    pub fn step_time(&mut self, dt: f32) {
+        let mut density_prime = self.density.clone();
+
+        // The FTCS scheme is formulated like:
+        //  d(x) = d(x) + (dt / 2) * (d(x+1) + d(x-1) - 2d(x))
+        // where the (dt/2) term is repeated for each individual axis.
+        //
+        // Since we have 3 axis to step, we want to subtract 6 * (dt/2) and then add the
+        //   (dt/2) * (x+1, x-1, y+1, y-1, z+1, z-1)
+        // offset values.
+        let self_scale = 1.0 - (3.0 * dt);
+        density_prime.iter_mut().for_each(|x| {
+            *x = *x * self_scale;
+        });
+
+        let offset_scale = dt / 2.0;
+
+        // x+1 slice
+        Zip::from(density_prime.slice_mut(s![.., .., ..-1]))
+            .and(self.density.slice(s![.., .., 1..]))
+            .for_each(|prime, orig| {
+                *prime += orig * offset_scale;
+            });
+
+        // x-1 slice
+        Zip::from(density_prime.slice_mut(s![.., .., 1..]))
+            .and(self.density.slice(s![.., .., ..-1]))
+            .for_each(|prime, orig| {
+                *prime += orig * offset_scale;
+            });
+
+        // y+1 slice
+        Zip::from(density_prime.slice_mut(s![.., ..-1, ..]))
+            .and(self.density.slice(s![.., 1.., ..]))
+            .for_each(|prime, orig| {
+                *prime += orig * offset_scale;
+            });
+
+        // y-1 slice
+        Zip::from(density_prime.slice_mut(s![.., 1.., ..]))
+            .and(self.density.slice(s![.., ..-1, ..]))
+            .for_each(|prime, orig| {
+                *prime += orig * offset_scale;
+            });
+
+        // z+1 slice
+        Zip::from(density_prime.slice_mut(s![..-1, .., ..]))
+            .and(self.density.slice(s![1.., .., ..]))
+            .for_each(|prime, orig| {
+                *prime += orig * offset_scale;
+            });
+
+        // z-1 slice
+        Zip::from(density_prime.slice_mut(s![1.., .., ..]))
+            .and(self.density.slice(s![..-1, .., ..]))
+            .for_each(|prime, orig| {
+                *prime += orig * offset_scale;
+            });
+
+        // TODO: probably want to keep the density_prime array around to reduce allocation
+        // throughput.
+        std::mem::swap(&mut self.density, &mut density_prime);
     }
 }
 
