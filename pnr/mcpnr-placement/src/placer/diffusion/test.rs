@@ -187,3 +187,24 @@ fn diffuse_simple() {
     assert_relative_eq!(diffuser.density[(2, 2, 1)], 0.0);
     assert_relative_eq!(diffuser.density[(2, 2, 2)], 0.0);
 }
+
+#[test]
+fn vel_simple() {
+    let mut diffuser = test_diffuser();
+
+    diffuser.density.iter_mut().for_each(|v| *v = 1.0);
+    diffuser.density[(2, 2, 2)] = 2.0;
+    diffuser.compute_velocities();
+
+    assert_relative_eq!(diffuser.vel_x[(2, 2, 2)], 0.0);
+    assert_relative_eq!(diffuser.vel_x[(1, 2, 2)], 0.5);
+    assert_relative_eq!(diffuser.vel_x[(3, 2, 2)], -0.5);
+
+    assert_relative_eq!(diffuser.vel_y[(2, 2, 2)], 0.0);
+    assert_relative_eq!(diffuser.vel_y[(2, 1, 2)], 0.5);
+    assert_relative_eq!(diffuser.vel_y[(2, 3, 2)], -0.5);
+
+    assert_relative_eq!(diffuser.vel_z[(2, 2, 2)], 0.0);
+    assert_relative_eq!(diffuser.vel_z[(2, 2, 1)], 0.5);
+    assert_relative_eq!(diffuser.vel_z[(2, 2, 3)], -0.5);
+}

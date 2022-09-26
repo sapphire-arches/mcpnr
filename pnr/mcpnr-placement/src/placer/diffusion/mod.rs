@@ -1,6 +1,5 @@
-use std::iter::FusedIterator;
-
-use ndarray::{s, Array3, Axis, Zip};
+use ndarray::{s, Array3, Axis, Slice, Zip};
+use tracing::info_span;
 
 use crate::core::NetlistHypergraph;
 
@@ -26,6 +25,8 @@ pub struct DiffusionPlacer {
     vel_x: Array3<f32>,
     /// Y velocity field
     vel_y: Array3<f32>,
+    /// Z velocity field
+    vel_z: Array3<f32>,
 }
 
 impl DiffusionPlacer {
@@ -50,6 +51,7 @@ impl DiffusionPlacer {
             density: Array3::zeros(shape),
             vel_x: Array3::zeros(shape),
             vel_y: Array3::zeros(shape),
+            vel_z: Array3::zeros(shape),
         }
     }
 
@@ -96,6 +98,42 @@ impl DiffusionPlacer {
                     }
                 }
             }
+        }
+    }
+
+    /// Compute the flow velocities, based on the current density in each region.
+    ///
+    /// Assumes the area outside the grid is overfilled by a factor of 8, to encourage cells to
+    /// leave the border of the chip.
+    pub fn compute_velocities(&mut self) {
+        let _span = info_span!("Computing velocities").entered();
+        let overfill_factor = (self.region_size as f32).powi(3) * 8.0;
+        // Implements:
+        //   v_0(x, y, z) = - (d(x+1) - d(x - 1)) / (2 * d(x))
+        let mut velocities = [&mut self.vel_x, &mut self.vel_y, &mut self.vel_z];
+
+        for axis in 0..3 {
+            let vel_grid = &mut velocities[axis];
+            let axis = Axis(axis);
+            Zip::from(vel_grid.slice_axis_mut(axis, Slice::from(1isize..-1)))
+                .and(self.density.slice_axis(axis, Slice::from(1isize..-1)))
+                .and(self.density.slice_axis(axis, Slice::from(2isize..)))
+                .and(self.density.slice_axis(axis, Slice::from(..-2isize)))
+                .for_each(|v, z, p, n| *v = (n - p) / (-2.0 * z));
+
+            // XXX: This should actually clamp to zero, according to the paper. However, our
+            // initial placements will result in that being Problematic (as the initial placement
+            // will pull everything into a single axis on a typical "chip", with all the IO in one
+            // section.)
+            Zip::from(vel_grid.slice_axis_mut(axis, Slice::new(0, Some(1), 1)))
+                .and(self.density.slice_axis(axis, Slice::new(0, Some(1), 1)))
+                .and(self.density.slice_axis(axis, Slice::new(1, Some(2), 1)))
+                .for_each(|v, z, p| *v = (overfill_factor - p) / (-2.0 * z));
+
+            Zip::from(vel_grid.slice_axis_mut(axis, Slice::new(-1, None, 1)))
+                .and(self.density.slice_axis(axis, Slice::new(-1, None, 1)))
+                .and(self.density.slice_axis(axis, Slice::new(-2, Some(-1), 1)))
+                .for_each(|v, z, n| *v = (n - overfill_factor) / (-2.0 * z));
         }
     }
 
