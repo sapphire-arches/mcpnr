@@ -32,8 +32,12 @@ pub struct DiffusionPlacer {
 impl DiffusionPlacer {
     /// Construct a new diffusion placer, with size `(size_x, size_y, size_z)` (specified in cell
     /// grid units) and the given `region_size` (also in cell grid units). The diffusion will then
-    /// take place on a grid of size `(size_x / region_size, size_y / region_size, size_z /
+    /// take place on a grid of size `(2 + size_x / region_size, 2 + size_y / region_size, 2 + size_z /
     /// region_size)`.
+    ///
+    /// We add 2 cells to act as a border across which cells cannot traverse, without having to
+    /// deal with the complexity of ensuring nonzero velocity to push cells off the borders of the
+    /// placement region.
     pub fn new(size_x: usize, size_y: usize, size_z: usize, region_size: usize) -> Self {
         // TODO: handle this more gracefully
         assert!(size_x & region_size == 0);
@@ -41,9 +45,9 @@ impl DiffusionPlacer {
         assert!(size_z & region_size == 0);
 
         let shape = [
-            size_x / region_size,
-            size_y / region_size,
-            size_z / region_size,
+            2 + size_x / region_size,
+            2 + size_y / region_size,
+            2 + size_z / region_size,
         ];
 
         Self {
@@ -57,17 +61,25 @@ impl DiffusionPlacer {
 
     /// Fill in the density field using the given netlist
     pub fn splat(&mut self, net: &NetlistHypergraph) {
+        let region_size_f = self.region_size as f32;
+        let size_f = (self.density.shape()[0] - 2) as f32;
+
+        // Start with a clean slate
+        self.density.fill(0.0);
+
         // This is the obvious algorithm, which splats each cell one by one. It's possible other
-        // strategies are more efficient, e.g. iterating over the region grid instead
-
+        // strategies are more efficient, e.g. iterating over the region grid instead and then
+        // finding the cells in an acceleration structure.
         for cell in net.cells.iter() {
-            let cell_x_start = clamp_coord(cell.x);
-            let cell_y_start = clamp_coord(cell.y);
-            let cell_z_start = clamp_coord(cell.z);
+            // We add 1 after clamping to ensure placement inside the "live" region and not the
+            // margins
+            let cell_x_start = region_size_f + cell.x.clamp(0.0, size_f);
+            let cell_y_start = region_size_f + cell.y.clamp(0.0, size_f);
+            let cell_z_start = region_size_f + cell.z.clamp(0.0, size_f);
 
-            let cell_x_end = clamp_coord(cell.x + cell.sx);
-            let cell_y_end = clamp_coord(cell.y + cell.sy);
-            let cell_z_end = clamp_coord(cell.z + cell.sz);
+            let cell_x_end = region_size_f + (cell.x + cell.sx).clamp(0.0, size_f);
+            let cell_y_end = region_size_f + (cell.y + cell.sy).clamp(0.0, size_f);
+            let cell_z_end = region_size_f + (cell.z + cell.sz).clamp(0.0, size_f);
 
             let mut cell_x = cell_x_start;
             let mut cell_y = cell_y_start;
@@ -93,11 +105,22 @@ impl DiffusionPlacer {
                             advance_coord(&mut cell_x, cell_x_end, region_x, self.region_size);
 
                         let coord = (region_x, region_y, region_z);
-                        dbg!(coord, span_x, span_y, span_z);
+                        dbg!(coord, span_x, span_y, span_z, span_x * span_y * span_z);
                         self.density[(coord)] += span_x * span_y * span_z;
                     }
                 }
             }
+        }
+
+        // Fill the margins with some high density value to encourage cell movement away from the
+        // absolute edges.
+        let margin_fill = (self.region_size as f32).powi(3) * 8.0;
+        for axis in 0..3 {
+            let axis = Axis(axis);
+            Zip::from(self.density.slice_axis_mut(axis, Slice::new(0, Some(1), 1)))
+                .for_each(|v| *v = margin_fill);
+            Zip::from(self.density.slice_axis_mut(axis, Slice::new(-1, Some(-1), 1)))
+                .for_each(|v| *v = margin_fill);
         }
     }
 
@@ -107,7 +130,6 @@ impl DiffusionPlacer {
     /// leave the border of the chip.
     pub fn compute_velocities(&mut self) {
         let _span = info_span!("Computing velocities").entered();
-        let overfill_factor = (self.region_size as f32).powi(3) * 8.0;
         // Implements:
         //   v_0(x, y, z) = - (d(x+1) - d(x - 1)) / (2 * d(x))
         let mut velocities = [&mut self.vel_x, &mut self.vel_y, &mut self.vel_z];
@@ -120,20 +142,6 @@ impl DiffusionPlacer {
                 .and(self.density.slice_axis(axis, Slice::from(2isize..)))
                 .and(self.density.slice_axis(axis, Slice::from(..-2isize)))
                 .for_each(|v, z, p, n| *v = (n - p) / (-2.0 * z));
-
-            // XXX: This should actually clamp to zero, according to the paper. However, our
-            // initial placements will result in that being Problematic (as the initial placement
-            // will pull everything into a single axis on a typical "chip", with all the IO in one
-            // section.)
-            Zip::from(vel_grid.slice_axis_mut(axis, Slice::new(0, Some(1), 1)))
-                .and(self.density.slice_axis(axis, Slice::new(0, Some(1), 1)))
-                .and(self.density.slice_axis(axis, Slice::new(1, Some(2), 1)))
-                .for_each(|v, z, p| *v = (overfill_factor - p) / (-2.0 * z));
-
-            Zip::from(vel_grid.slice_axis_mut(axis, Slice::new(-1, None, 1)))
-                .and(self.density.slice_axis(axis, Slice::new(-1, None, 1)))
-                .and(self.density.slice_axis(axis, Slice::new(-2, Some(-1), 1)))
-                .for_each(|v, z, n| *v = (n - overfill_factor) / (-2.0 * z));
         }
     }
 
@@ -203,14 +211,6 @@ impl DiffusionPlacer {
         // TODO: probably want to keep the density_prime array around to reduce allocation
         // throughput.
         std::mem::swap(&mut self.density, &mut density_prime);
-    }
-}
-
-fn clamp_coord(x: f32) -> f32 {
-    if x < 0.0 {
-        0.0
-    } else {
-        x
     }
 }
 
