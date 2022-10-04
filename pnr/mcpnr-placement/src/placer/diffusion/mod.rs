@@ -40,9 +40,9 @@ impl DiffusionPlacer {
     /// placement region.
     pub fn new(size_x: usize, size_y: usize, size_z: usize, region_size: usize) -> Self {
         // TODO: handle this more gracefully
-        assert!(size_x & region_size == 0);
-        assert!(size_y & region_size == 0);
-        assert!(size_z & region_size == 0);
+        assert!(size_x % region_size == 0);
+        assert!(size_y % region_size == 0);
+        assert!(size_z % region_size == 0);
 
         let shape = [
             2 + size_x / region_size,
@@ -105,7 +105,6 @@ impl DiffusionPlacer {
                             advance_coord(&mut cell_x, cell_x_end, region_x, self.region_size);
 
                         let coord = (region_x, region_y, region_z);
-                        dbg!(coord, span_x, span_y, span_z, span_x * span_y * span_z);
                         self.density[(coord)] += span_x * span_y * span_z;
                     }
                 }
@@ -119,8 +118,11 @@ impl DiffusionPlacer {
             let axis = Axis(axis);
             Zip::from(self.density.slice_axis_mut(axis, Slice::new(0, Some(1), 1)))
                 .for_each(|v| *v = margin_fill);
-            Zip::from(self.density.slice_axis_mut(axis, Slice::new(-1, Some(-1), 1)))
-                .for_each(|v| *v = margin_fill);
+            Zip::from(
+                self.density
+                    .slice_axis_mut(axis, Slice::new(-1, Some(-1), 1)),
+            )
+            .for_each(|v| *v = margin_fill);
         }
     }
 
@@ -142,6 +144,60 @@ impl DiffusionPlacer {
                 .and(self.density.slice_axis(axis, Slice::from(2isize..)))
                 .and(self.density.slice_axis(axis, Slice::from(..-2isize)))
                 .for_each(|v, z, p, n| *v = (n - p) / (-2.0 * z));
+        }
+    }
+
+    /// Move cells according to the computed velocity fields.
+    pub fn move_cells(&self, net: &mut NetlistHypergraph, dt: f32) {
+        let axies = [&self.vel_x, &self.vel_y, &self.vel_z];
+
+        for cell in net.cells.iter_mut() {
+            if cell.pos_locked {
+                continue;
+            }
+
+            let p = cell.center_pos() / (self.region_size as f32);
+            let i = (p.x as usize + 1, p.y as usize + 1, p.z as usize + 1);
+            let f0 = (p.x.fract(), p.y.fract(), p.z.fract());
+            let f1 = (1.0 - f0.0, 1.0 - f0.1, 1.0 - f0.2);
+            let c000 = (i.0 + 0, i.1 + 0, i.2 + 0);
+            let c001 = (i.0 + 0, i.1 + 0, i.2 + 1);
+            let c010 = (i.0 + 0, i.1 + 1, i.2 + 0);
+            let c011 = (i.0 + 0, i.1 + 1, i.2 + 1);
+            let c100 = (i.0 + 1, i.1 + 0, i.2 + 0);
+            let c101 = (i.0 + 1, i.1 + 0, i.2 + 1);
+            let c110 = (i.0 + 1, i.1 + 1, i.2 + 0);
+            let c111 = (i.0 + 1, i.1 + 1, i.2 + 1);
+
+            for (axis, vel) in axies.iter().enumerate() {
+                let v000 = vel[c000];
+                let v001 = vel[c001];
+                let v010 = vel[c010];
+                let v011 = vel[c011];
+                let v100 = vel[c100];
+                let v101 = vel[c101];
+                let v110 = vel[c110];
+                let v111 = vel[c111];
+
+                let x00 = (v000 * f1.0) + (v001 * f0.0);
+                let x01 = (v010 * f1.0) + (v011 * f0.0);
+                let x10 = (v100 * f1.0) + (v101 * f0.0);
+                let x11 = (v110 * f1.0) + (v111 * f0.0);
+
+                let y0 = (x00 * f1.1) + (x01 * f0.1);
+                let y1 = (x10 * f1.1) + (x11 * f0.1);
+
+                let v = (y0 * f1.2) + (y1 * f0.2);
+
+                dbg!(axis, p, i, f0, f1, v);
+
+                match axis {
+                    0 => cell.x += v * dt,
+                    1 => cell.y += v * dt,
+                    2 => cell.z += v * dt,
+                    _ => unreachable!("Only 3 axies"),
+                }
+            }
         }
     }
 
@@ -217,7 +273,6 @@ impl DiffusionPlacer {
 fn advance_coord(cell: &mut f32, end: f32, region: usize, region_size: usize) -> f32 {
     let next_cell = ((region + 1) * region_size) as f32;
     let span = if end < next_cell { end } else { next_cell } - *cell;
-    dbg!(*cell, end, region, next_cell, span);
 
     *cell = next_cell;
 

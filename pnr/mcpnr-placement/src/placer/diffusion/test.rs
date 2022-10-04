@@ -208,3 +208,28 @@ fn vel_simple() {
     assert_relative_eq!(diffuser.vel_z[(3, 3, 2)], 0.5);
     assert_relative_eq!(diffuser.vel_z[(3, 3, 4)], -0.5);
 }
+
+#[test]
+fn movement_sanity() {
+    let mut diffuser = test_diffuser();
+
+    diffuser.vel_x[(2, 2, 2)] = 1.0;
+    diffuser.vel_y[(2, 2, 2)] = 1.0;
+    diffuser.vel_z[(2, 2, 2)] = 1.0;
+
+    let mut net = netlist!(
+        cells: [ mobile_0 => (1, 1, 1); ],
+        fixed_cells: [],
+        signals: []
+    );
+
+    net.cells[0].x = 0.5;
+    net.cells[0].y = 0.5;
+    net.cells[0].z = 0.5;
+
+    diffuser.move_cells(&mut net, 0.25);
+
+    assert_relative_eq!(net.cells[0].x, 0.53125);
+    assert_relative_eq!(net.cells[0].y, 0.53125);
+    assert_relative_eq!(net.cells[0].z, 0.53125);
+}
