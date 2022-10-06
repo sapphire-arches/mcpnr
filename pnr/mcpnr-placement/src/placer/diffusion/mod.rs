@@ -189,8 +189,6 @@ impl DiffusionPlacer {
 
                 let v = (y0 * f1.2) + (y1 * f0.2);
 
-                dbg!(axis, p, i, f0, f1, v);
-
                 match axis {
                     0 => cell.x += v * dt,
                     1 => cell.y += v * dt,

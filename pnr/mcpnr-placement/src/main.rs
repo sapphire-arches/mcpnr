@@ -5,8 +5,13 @@ use mcpnr_common::protos::mcpnr::PlacedDesign;
 use mcpnr_common::protos::yosys::pb::parameter::Value as YPValue;
 use mcpnr_common::protos::yosys::pb::{Design, Parameter};
 use placement_cell::CellFactory;
-use placer::analytical::{Clique, DecompositionStrategy, MoveableStar, ThresholdCrossover};
+use placer::analytical::{
+    AnchoredByNet, Clique, DecompositionStrategy, MoveableStar, ThresholdCrossover,
+};
+use placer::diffusion::DiffusionPlacer;
+use std::convert::TryInto;
 use std::path::PathBuf;
+use tracing::info_span;
 use tracing_subscriber::fmt::format::FmtSpan;
 
 use crate::core::NetlistHypergraph;
@@ -22,6 +27,7 @@ struct Config {
     output_file: PathBuf,
     structure_directory: PathBuf,
     size_x: u32,
+    size_y: u32,
     size_z: u32,
 }
 
@@ -37,6 +43,7 @@ impl Config {
                 .unwrap()
                 .parse()
                 .context("Parse SIZE_X")?,
+            size_y: 4,
             size_z: matches
                 .value_of("SIZE_Z")
                 .unwrap()
@@ -111,8 +118,39 @@ fn load_cells(config: &Config, design: Design) -> Result<(NetlistHypergraph, Str
 }
 
 fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()> {
+    // Initial placement
     let mut strategy = ThresholdCrossover::new(4, Clique::new(), MoveableStar::new());
     strategy.execute(cells)?;
+
+    for wide_iteration in 0..256 {
+        // Density-driven cell spreading
+        info_span!("Density placement", iteration = wide_iteration).in_scope(
+            || -> Result<()> {
+                let mut density = DiffusionPlacer::new(
+                    config.size_x.try_into().context("Convert X size")?,
+                    config.size_y.try_into().context("Convert Y size")?,
+                    config.size_z.try_into().context("Convert Z size")?,
+                    2,
+                );
+
+                density.splat(cells);
+
+                for narrow_iteration in 0..128 {
+                    let _span = info_span!("narrow_iteration", narrow_iteration = narrow_iteration)
+                        .entered();
+                    density.compute_velocities();
+                    density.move_cells(cells, 0.1);
+                    density.step_time(0.1);
+                }
+
+                Ok(())
+            },
+        )?;
+
+        // Analytic wirerecovery
+        let mut strategy = ThresholdCrossover::new(2, Clique::new(), AnchoredByNet::new());
+        strategy.execute(cells)?;
+    }
 
     Ok(())
 }
