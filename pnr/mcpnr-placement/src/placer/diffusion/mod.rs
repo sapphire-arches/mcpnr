@@ -1,3 +1,4 @@
+use log::info;
 use ndarray::{s, Array3, Axis, Slice, Zip};
 use tracing::info_span;
 
@@ -161,8 +162,15 @@ impl DiffusionPlacer {
 
         let shape = self.density.shape();
 
+        let mut skip_cell_count = 0;
+        let mut skip_cell_fixed_counter = 0;
+        let mut skip_cell_low_count = 0;
+        let mut skip_cell_high_count = 0;
+
         for cell in net.cells.iter_mut() {
             if cell.pos_locked {
+                skip_cell_count += 1;
+                skip_cell_fixed_counter += 1;
                 continue;
             }
 
@@ -172,35 +180,42 @@ impl DiffusionPlacer {
             if cell.x < 0.0 {
                 // Skip the cell
                 cell.x = 0.0;
+                skip_cell_low_count += 1;
                 skip_cell = true;
             }
 
             if cell.y < 0.0 {
                 cell.y = 0.0;
+                skip_cell_low_count += 1;
                 skip_cell = true;
             }
 
             if cell.z < 0.0 {
                 cell.z = 0.0;
+                skip_cell_low_count += 1;
                 skip_cell = true;
             }
 
             if cell.x + cell.sx > (shape[0] - 2) as f32 {
                 cell.x = (shape[0] - 2) as f32 - cell.sx;
+                skip_cell_high_count += 1;
                 skip_cell = true;
             }
 
             if cell.y + cell.sy > (shape[1] - 2) as f32 {
                 cell.y = (shape[1] - 2) as f32 - cell.sy;
+                skip_cell_high_count += 1;
                 skip_cell = true;
             }
 
             if cell.z + cell.sz > (shape[2] - 2) as f32 {
                 cell.z = (shape[2] - 2) as f32 - cell.sz;
+                skip_cell_high_count += 1;
                 skip_cell = true;
             }
 
             if skip_cell {
+                skip_cell_count += 1;
                 continue;
             }
 
@@ -245,6 +260,8 @@ impl DiffusionPlacer {
                 }
             }
         }
+
+        info!("Skipped {skip_cell_count}/{} for fix/lo/hi {skip_cell_fixed_counter}/{skip_cell_low_count}/{skip_cell_high_count}", net.cells.len());
     }
 
     /// Step the density forward in time.
