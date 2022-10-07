@@ -62,7 +62,15 @@ impl DiffusionPlacer {
     /// Fill in the density field using the given netlist
     pub fn splat(&mut self, net: &NetlistHypergraph) {
         let region_size_f = self.region_size as f32;
-        let size_f = (self.density.shape()[0] - 2) as f32;
+        let (size_x, size_y, size_z) = {
+            let shape = self.density.shape();
+
+            (
+                (shape[0] - 2) as f32,
+                (shape[1] - 2) as f32,
+                (shape[2] - 2) as f32,
+            )
+        };
 
         // Start with a clean slate
         self.density.fill(0.0);
@@ -73,13 +81,13 @@ impl DiffusionPlacer {
         for cell in net.cells.iter() {
             // We add 1 after clamping to ensure placement inside the "live" region and not the
             // margins
-            let cell_x_start = region_size_f + cell.x.clamp(0.0, size_f);
-            let cell_y_start = region_size_f + cell.y.clamp(0.0, size_f);
-            let cell_z_start = region_size_f + cell.z.clamp(0.0, size_f);
+            let cell_x_start = region_size_f + cell.x.clamp(0.0, size_x);
+            let cell_y_start = region_size_f + cell.y.clamp(0.0, size_y);
+            let cell_z_start = region_size_f + cell.z.clamp(0.0, size_z);
 
-            let cell_x_end = region_size_f + (cell.x + cell.sx).clamp(0.0, size_f);
-            let cell_y_end = region_size_f + (cell.y + cell.sy).clamp(0.0, size_f);
-            let cell_z_end = region_size_f + (cell.z + cell.sz).clamp(0.0, size_f);
+            let cell_x_end = region_size_f + (cell.x + cell.sx).clamp(0.0, size_x);
+            let cell_y_end = region_size_f + (cell.y + cell.sy).clamp(0.0, size_y);
+            let cell_z_end = region_size_f + (cell.z + cell.sz).clamp(0.0, size_z);
 
             let mut cell_x = cell_x_start;
             let mut cell_y = cell_y_start;
@@ -151,13 +159,53 @@ impl DiffusionPlacer {
     pub fn move_cells(&self, net: &mut NetlistHypergraph, dt: f32) {
         let axies = [&self.vel_x, &self.vel_y, &self.vel_z];
 
+        let shape = self.density.shape();
+
         for cell in net.cells.iter_mut() {
             if cell.pos_locked {
                 continue;
             }
 
             let p = cell.center_pos() / (self.region_size as f32);
+
+            let mut skip_cell = false;
+            if cell.x < 0.0 {
+                // Skip the cell
+                cell.x = 0.0;
+                skip_cell = true;
+            }
+
+            if cell.y < 0.0 {
+                cell.y = 0.0;
+                skip_cell = true;
+            }
+
+            if cell.z < 0.0 {
+                cell.z = 0.0;
+                skip_cell = true;
+            }
+
+            if cell.x + cell.sx > (shape[0] - 2) as f32 {
+                cell.x = (shape[0] - 2) as f32 - cell.sx;
+                skip_cell = true;
+            }
+
+            if cell.y + cell.sy > (shape[1] - 2) as f32 {
+                cell.y = (shape[1] - 2) as f32 - cell.sy;
+                skip_cell = true;
+            }
+
+            if cell.z + cell.sz > (shape[2] - 2) as f32 {
+                cell.z = (shape[2] - 2) as f32 - cell.sz;
+                skip_cell = true;
+            }
+
+            if skip_cell {
+                continue;
+            }
+
             let i = (p.x as usize + 1, p.y as usize + 1, p.z as usize + 1);
+
             let f0 = (p.x.fract(), p.y.fract(), p.z.fract());
             let f1 = (1.0 - f0.0, 1.0 - f0.1, 1.0 - f0.2);
             let c000 = (i.0 + 0, i.1 + 0, i.2 + 0);
