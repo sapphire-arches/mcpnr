@@ -1,6 +1,19 @@
-use crate::{core::NetlistHypergraph, load_cells, load_design, place_algorithm, Config};
-use anyhow::Result;
+use crate::{
+    core::NetlistHypergraph,
+    load_cells, load_design, place_algorithm,
+    placer::{
+        analytical::{
+            AnchoredByNet, Clique, DecompositionStrategy, MoveableStar, ThresholdCrossover,
+        },
+        diffusion::DiffusionPlacer,
+    },
+    Config,
+};
+use anyhow::{Context, Result};
 use eframe::{App, CreationContext};
+use egui::Ui;
+use log::error;
+use tracing::info_span;
 
 use self::canvas::{Canvas, CanvasGlobalResources, CanvasWidget};
 
@@ -14,6 +27,8 @@ struct UIState {
     // UI state
     do_debug_render: bool,
     primary_canvas: Canvas,
+
+    diffusion_config: DiffusionConfig,
 }
 
 impl UIState {
@@ -31,6 +46,11 @@ impl UIState {
             creator,
             do_debug_render: false,
             primary_canvas: Canvas::new(cc),
+
+            diffusion_config: DiffusionConfig {
+                step_size: 0.1,
+                iterations: 32,
+            },
         }
     }
 }
@@ -47,6 +67,33 @@ impl App for UIState {
                     Err(e) => log::error!("Placement failure: {:?}", e),
                 };
             }
+
+            ui.group(|ui| {
+                if ui.button("Unconstrained Analytical").clicked() {
+                    let mut strategy =
+                        ThresholdCrossover::new(4, Clique::new(), MoveableStar::new());
+                    match strategy.execute(&mut self.cells) {
+                        Ok(_) => {}
+                        Err(e) => log::error!("Unconstrained analytical failure: {:?}", e),
+                    };
+                }
+            });
+
+            ui.group(|ui| {
+                if ui.button("Constrained Analytical").clicked() {
+                    let mut strategy =
+                        ThresholdCrossover::new(2, Clique::new(), AnchoredByNet::new());
+                    match strategy.execute(&mut self.cells) {
+                        Ok(_) => todo!(),
+                        Err(e) => log::error!("Constrained analytical failure: {:?}", e),
+                    };
+                }
+            });
+
+            ui.group(|ui| {
+                self.diffusion_config
+                    .run_ui(ui, &self.config, &mut self.cells);
+            });
 
             ui.collapsing("EGUI inspection", |ui| {
                 ui.checkbox(&mut self.do_debug_render, "Do debug rendering");
@@ -76,6 +123,53 @@ pub(crate) fn run_gui(config: &Config) -> Result<()> {
         eframe::NativeOptions::default(),
         Box::new(|cc| Box::new(UIState::new(config, cells, creator, cc))),
     );
+
+    Ok(())
+}
+
+struct DiffusionConfig {
+    step_size: f32,
+    iterations: u32,
+}
+
+impl DiffusionConfig {
+    fn run_ui(&mut self, ui: &mut Ui, config: &Config, cells: &mut NetlistHypergraph) {
+        ui.add(egui::Slider::new(&mut self.step_size, 0.01..=0.5).logarithmic(true));
+        ui.add(egui::Slider::new(&mut self.iterations, 1..=128));
+
+        if ui.button("Run").clicked() {
+            match run_density(config, cells, self.iterations, self.step_size) {
+                Ok(()) => {}
+                Err(e) => error!("Failed to run density: {:?}", e),
+            };
+        }
+    }
+}
+
+fn run_density(
+    config: &Config,
+    cells: &mut NetlistHypergraph,
+    iterations: u32,
+    step_size: f32,
+) -> Result<()> {
+    let _span = info_span!("diffusion").entered();
+
+    let mut density = DiffusionPlacer::new(
+        config.size_x.try_into().context("Convert X size")?,
+        config.size_y.try_into().context("Convert Y size")?,
+        config.size_z.try_into().context("Convert Z size")?,
+        2,
+    );
+
+    density.splat(cells);
+
+    for iteration in 0..iterations {
+        let _span = info_span!("diffusion_iteration", iteration = iteration).entered();
+
+        density.compute_velocities();
+        density.move_cells(cells, step_size);
+        density.step_time(step_size);
+    }
 
     Ok(())
 }
