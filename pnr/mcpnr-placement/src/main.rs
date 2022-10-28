@@ -205,12 +205,12 @@ fn main() -> Result<()> {
         .help("Run a GUI for interactive debugging of the placer");
     let place_command =
         add_common_args(Command::new("place")).help("Run the placer in headless mode");
-    let matches = Command::new("mcpnr-placement")
+    let mut command = Command::new("mcpnr-placement")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about("Placement phase for the MCPNR flow")
-        .subcommands(vec![gui_command, place_command])
-        .get_matches();
+        .subcommands(vec![gui_command, place_command]);
+    let matches = command.get_matches_mut();
 
     match matches.subcommand() {
         Some(("gui", matches)) => {
@@ -219,6 +219,9 @@ fn main() -> Result<()> {
         Some(("place", matches)) => {
             run_placement(&Config::from_args(matches).context("Building config from args")?)
         }
+        None => command
+            .print_long_help()
+            .context("Failed to write long help"),
         e => panic!("Unhandled subcommand {:?}", e),
     }
 }
