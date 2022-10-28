@@ -84,7 +84,7 @@ impl App for UIState {
                     let mut strategy =
                         ThresholdCrossover::new(2, Clique::new(), AnchoredByNet::new());
                     match strategy.execute(&mut self.cells) {
-                        Ok(_) => todo!(),
+                        Ok(_) => {}
                         Err(e) => log::error!("Constrained analytical failure: {:?}", e),
                     };
                 }
@@ -134,6 +134,7 @@ struct DiffusionConfig {
 
 impl DiffusionConfig {
     fn run_ui(&mut self, ui: &mut Ui, config: &Config, cells: &mut NetlistHypergraph) {
+        ui.label("Diffusion placement");
         ui.add(egui::Slider::new(&mut self.step_size, 0.01..=0.5).logarithmic(true));
         ui.add(egui::Slider::new(&mut self.iterations, 1..=128));
 
