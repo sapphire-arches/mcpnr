@@ -59,11 +59,6 @@ impl CanvasGlobalResources {
 
         let device = &render_state.device;
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("canvas.shader"),
-            source: wgpu::ShaderSource::Wgsl(shader::SOURCE.into()),
-        });
-
         render_state
             .egui_rpass
             .write()
@@ -71,14 +66,9 @@ impl CanvasGlobalResources {
             .insert(Self {
                 rectangle: rectangles::GlobalResources::new(
                     device,
-                    &shader,
                     render_state.target_format.into(),
                 ),
-                line: lines::GlobalResources::new(
-                    device,
-                    &shader,
-                    render_state.target_format.into(),
-                ),
+                line: lines::GlobalResources::new(device, render_state.target_format.into()),
                 canvases: Default::default(),
             });
     }
@@ -247,7 +237,10 @@ impl Canvas {
                     .iter()
                     .map(|cell| {
                         let center = &cells.cells[*cell].center_pos();
-                        (center.x, center.z)
+                        lines::Vertex {
+                            color: egui::Color32::RED,
+                            position: (center.x, center.z),
+                        }
                     })
                     .tuple_windows()
             }),

@@ -1,10 +1,11 @@
+use bytemuck::{Pod, Zeroable};
 use eframe::wgpu::{self, Device};
 use nalgebra as na;
 use std::sync::Arc;
 
 use crate::gui::canvas::CanvasGlobalResources;
 
-use super::{shader, Canvas};
+use super::Canvas;
 
 /********************************************************************************
  * Rendering types and constants
@@ -15,14 +16,26 @@ type IndexType = u16;
 /// Matching index format for [`IndexType`]
 const RECT_INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint16;
 
-type Uniforms = shader::Uniforms;
-type Vertex = shader::Vertex;
-
 /// 1 vertex per corner
 const VERTEX_PER_RECT: u64 = 4;
 /// 6 indicies per rectangle, 1 for the provoking vertex of the strip, 4 to draw each line, and
 /// then 1 for the reset
 const INDEX_PER_RECT: u64 = 6;
+
+/// Uniform buffer layout for the rectangle renderer
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Pod, Zeroable)]
+pub struct Uniforms {
+    pub projection_view: [f32; 16],
+    pub color: [f32; 4],
+}
+
+/// Vertex type for the rectangle renderer
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
+pub struct Vertex {
+    pub pos: egui::Vec2,
+}
 
 /********************************************************************************
  * Implementation
@@ -38,11 +51,12 @@ pub struct GlobalResources {
 
 impl GlobalResources {
     /// Allocate all the globally shareable render resources
-    pub fn new(
-        device: &Device,
-        shader: &wgpu::ShaderModule,
-        rs_target_format: wgpu::ColorTargetState,
-    ) -> Self {
+    pub fn new(device: &Device, rs_target_format: wgpu::ColorTargetState) -> Self {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("canvas.rects.shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("./rectangles.wgsl").into()),
+        });
+
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("canvas.rects.bind_group_layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
