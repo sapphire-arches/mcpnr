@@ -70,6 +70,9 @@
                 # Performance testing
                 hyperfine
 
+                # Graphics debugging
+                renderdoc
+
                 # For formatting Nix expressions
                 nixpkgs-fmt
 
