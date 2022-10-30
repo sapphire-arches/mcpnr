@@ -1,11 +1,10 @@
 use std::{collections::HashMap, sync::atomic::AtomicU64};
 
-use eframe::wgpu;
 use egui::{Key, Vec2, Widget, WidgetInfo};
 use itertools::Itertools;
 use nalgebra as na;
 
-use crate::core::NetlistHypergraph;
+use crate::{core::NetlistHypergraph, placer::diffusion::DiffusionPlacer};
 
 mod lines;
 mod rectangles;
@@ -51,6 +50,7 @@ pub struct Canvas {
 pub struct CanvasWidget<'a> {
     canvas: &'a mut Canvas,
     cells: &'a NetlistHypergraph,
+    diffusion: &'a DiffusionPlacer,
 }
 
 impl CanvasGlobalResources {
@@ -100,7 +100,12 @@ impl Canvas {
         }
     }
 
-    fn render_canvas(&mut self, ui: &mut egui::Ui, cells: &NetlistHypergraph) -> egui::Response {
+    fn render_canvas(
+        &mut self,
+        ui: &mut egui::Ui,
+        cells: &NetlistHypergraph,
+        diffusion: &DiffusionPlacer,
+    ) -> egui::Response {
         let (render_rect, response) =
             ui.allocate_at_least(ui.available_size(), egui::Sense::click_and_drag());
 
@@ -192,59 +197,81 @@ impl Canvas {
         .to_homogeneous()
             * projection_view.to_homogeneous();
 
-        self.render_cells(cells, ui, projection_view, render_rect, clip_rect);
-        self.render_signals(cells, ui, projection_view, render_rect, clip_rect);
-
-        response
-    }
-
-    fn render_cells(
-        &mut self,
-        cells: &NetlistHypergraph,
-        ui: &mut egui::Ui,
-        projection_view: na::Matrix4<f32>,
-        render_rect: egui::Rect,
-        clip_rect: egui::Rect,
-    ) {
-        self.render_rectangles(
-            ui,
-            projection_view,
-            render_rect,
-            clip_rect,
-            cells.cells.iter().map(|cell| egui::Rect {
-                min: (cell.x, cell.z).into(),
-                max: (cell.x + cell.sx, cell.z + cell.sz).into(),
-            }),
-        );
-    }
-
-    fn render_signals(
-        &mut self,
-        cells: &NetlistHypergraph,
-        ui: &mut egui::Ui,
-        projection_view: na::Matrix4<f32>,
-        render_rect: egui::Rect,
-        clip_rect: egui::Rect,
-    ) {
         self.render_lines(
             ui,
             projection_view,
             render_rect,
             clip_rect,
-            cells.signals.iter().flat_map(|signal| {
-                signal
-                    .connected_cells
-                    .iter()
-                    .map(|cell| {
-                        let center = &cells.cells[*cell].center_pos();
-                        lines::Vertex {
-                            color: egui::Color32::RED,
-                            position: (center.x, center.z),
-                        }
-                    })
-                    .tuple_windows()
+            // Render signals
+            cells
+                .signals
+                .iter()
+                .flat_map(|signal| {
+                    signal
+                        .connected_cells
+                        .iter()
+                        .map(|cell| {
+                            let center = &cells.cells[*cell].center_pos();
+                            lines::Vertex {
+                                color: egui::Color32::RED,
+                                position: (center.x, center.z),
+                            }
+                        })
+                        .tuple_windows()
+                })
+                .chain({
+                    let shape = diffusion.density.shape();
+                    let scale = diffusion.region_size as f32;
+                    let size_x = shape[0] - 2;
+                    let size_y = shape[2] - 2;
+
+                    // Vertical lines for the diffusion placement grid
+                    (0..=(size_x + 2))
+                        .map(move |x| {
+                            let x = (x as f32) - 1.0;
+
+                            (
+                                lines::Vertex {
+                                    color: egui::Color32::GREEN,
+                                    position: (x * scale, -1.0 * scale),
+                                },
+                                lines::Vertex {
+                                    color: egui::Color32::GREEN,
+                                    position: (x * scale, ((size_y as f32) + 1.0) * scale),
+                                },
+                            )
+                        })
+                        // Horizontal lines for the diffusion placement grid
+                        .chain((0..=(size_y + 2)).map(move |y| {
+                            let y = (y as f32) - 1.0;
+
+                            (
+                                lines::Vertex {
+                                    color: egui::Color32::GREEN,
+                                    position: (-1.0 * scale, y * scale),
+                                },
+                                lines::Vertex {
+                                    color: egui::Color32::GREEN,
+                                    position: (((size_x as f32) + 1.0) * scale, y * scale),
+                                },
+                            )
+                        }))
+                }),
+        );
+
+        self.render_rectangles(
+            ui,
+            projection_view,
+            render_rect,
+            clip_rect,
+            // Cell rendering
+            cells.cells.iter().map(|cell| egui::Rect {
+                min: (cell.x, cell.z).into(),
+                max: (cell.x + cell.sx, cell.z + cell.sz).into(),
             }),
         );
+
+        response
     }
 }
 
@@ -259,8 +286,16 @@ impl CanvasId {
 }
 
 impl<'a> CanvasWidget<'a> {
-    pub fn new(canvas: &'a mut Canvas, cells: &'a NetlistHypergraph) -> Self {
-        Self { canvas, cells }
+    pub fn new(
+        canvas: &'a mut Canvas,
+        cells: &'a NetlistHypergraph,
+        diffusion: &'a DiffusionPlacer,
+    ) -> Self {
+        Self {
+            canvas,
+            cells,
+            diffusion,
+        }
     }
 }
 
@@ -277,7 +312,9 @@ impl<'a> Widget for CanvasWidget<'a> {
                 ui.label(info_string);
 
                 egui::Frame::canvas(ui.style())
-                    .show(ui, |ui| self.canvas.render_canvas(ui, self.cells))
+                    .show(ui, |ui| {
+                        self.canvas.render_canvas(ui, self.cells, self.diffusion)
+                    })
                     .inner
             },
         )

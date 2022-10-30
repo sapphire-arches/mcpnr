@@ -29,6 +29,7 @@ struct UIState {
     primary_canvas: Canvas,
 
     diffusion_config: DiffusionConfig,
+    diffusion_placer: DiffusionPlacer,
 }
 
 impl UIState {
@@ -39,6 +40,16 @@ impl UIState {
         cc: &CreationContext,
     ) -> Self {
         CanvasGlobalResources::register(cc);
+
+        // TODO: use this placer for the actual diffusion placement
+        let diffusion_placer = DiffusionPlacer::new(
+            // TODO: plumb through the error here instead of unwrapping Probably requires
+            // implementing eframe::app for Result<UIState> or something like that
+            config.size_x.try_into().unwrap(),
+            config.size_y.try_into().unwrap(),
+            config.size_z.try_into().unwrap(),
+            4,
+        );
 
         Self {
             config,
@@ -51,6 +62,7 @@ impl UIState {
                 step_size: 0.1,
                 iterations: 32,
             },
+            diffusion_placer,
         }
     }
 }
@@ -108,7 +120,11 @@ impl App for UIState {
             })
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add(CanvasWidget::new(&mut self.primary_canvas, &self.cells));
+            ui.add(CanvasWidget::new(
+                &mut self.primary_canvas,
+                &self.cells,
+                &self.diffusion_placer,
+            ));
         });
     }
 }

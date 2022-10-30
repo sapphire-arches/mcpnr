@@ -19,15 +19,15 @@ mod test;
 ///     South-Pacific Design Automation Conference 2008 Page 346 - 351
 pub struct DiffusionPlacer {
     /// Size of each diffusion region.
-    region_size: usize,
+    pub region_size: usize,
     /// The amount of cell volume contained in each placer region
-    density: Array3<f32>,
+    pub density: Array3<f32>,
     /// X velocity field
-    vel_x: Array3<f32>,
+    pub vel_x: Array3<f32>,
     /// Y velocity field
-    vel_y: Array3<f32>,
+    pub vel_y: Array3<f32>,
     /// Z velocity field
-    vel_z: Array3<f32>,
+    pub vel_z: Array3<f32>,
 }
 
 impl DiffusionPlacer {
