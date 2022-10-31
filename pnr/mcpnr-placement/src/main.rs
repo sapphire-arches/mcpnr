@@ -60,7 +60,11 @@ fn add_common_args<'help>(command: Command<'help>) -> Command<'help> {
                 .long("techlib")
                 .value_name("TECHLIB")
                 .allow_invalid_utf8(true)
-                .required(true),
+                .required(true)
+                .help("Specify the path to the technology library")
+                .long_help("
+The technology library is expected to be a folder, containing a folder named \"structures\" with a minecraft NBT structure format for each standard cell.
+"),
         )
         .arg(
             Arg::new("SIZE_X")
@@ -201,10 +205,11 @@ fn main() -> Result<()> {
             .init();
     }
 
-    let gui_command = add_common_args(Command::new("gui"))
-        .help("Run a GUI for interactive debugging of the placer");
+    let gui_command = add_common_args(
+        Command::new("gui").before_help("Run a GUI for interactive debugging of the placer"),
+    );
     let place_command =
-        add_common_args(Command::new("place")).help("Run the placer in headless mode");
+        add_common_args(Command::new("place").before_help("Run the placer in headless mode"));
     let mut command = Command::new("mcpnr-placement")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
