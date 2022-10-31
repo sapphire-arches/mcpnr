@@ -91,14 +91,14 @@ module mc_io_top (
 
   // Data bus
   MCPNR_SWITCHES #(
-    .POS_X(112), .POS_Y(0), .POS_Z(0),
+    .POS_X(0), .POS_Y(16), .POS_Z(0),
     .NSWITCH(32 + 1)
   ) data_switches (
     .O({dbus_rdt, dbus_ack})
   );
 
   MCPNR_LIGHTS #(
-    .POS_X(112), .POS_Y(8), .POS_Z(0),
+    .POS_X(0), .POS_Y(24), .POS_Z(0),
     .NLIGHT(32 + 32 + 4 + 1 + 1)
   ) data_lights (
     .I({dbus_adr, dbus_dat, dbus_sel, dbus_we, dbus_cyc})
@@ -106,14 +106,14 @@ module mc_io_top (
 
   // Extension bus
   MCPNR_SWITCHES #(
-    .POS_X(192), .POS_Y(0), .POS_Z(0),
+    .POS_X(0), .POS_Y(32), .POS_Z(0),
     .NSWITCH(1 + 32)
   ) ext_switches (
     .O({ext_ready, ext_rd})
   );
 
   MCPNR_LIGHTS #(
-    .POS_X(192), .POS_Y(8), .POS_Z(0),
+    .POS_X(0), .POS_Y(64), .POS_Z(0),
     .NLIGHT(3 + 32 + 32)
   ) ext_lights (
     .I({ext_funct3, ext_rs1, ext_rs2})
