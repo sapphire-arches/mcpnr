@@ -34,10 +34,6 @@ fn main() -> Result<(), std::io::Error> {
         PathBuf::from("./src/protos/placed_design.proto"),
     ];
 
-    for file in &proto_files {
-        println!("cargo:rerun-if-changed={}", file.to_string_lossy());
-    }
-
     prost_build::Config::new()
         .include_file("protos.rs")
         .file_descriptor_set_path(out_dir.join("file_descriptor_set.protobuf"))
