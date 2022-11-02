@@ -167,7 +167,17 @@ impl Canvas {
         let mut colors: Vec<egui::Color32> = Vec::new();
 
         for (s, e) in lines {
-            if !clip_rect.contains(s.position.into()) && !clip_rect.contains(e.position.into()) {
+            // Determine if the line intersects the clip rect.
+            //
+            // A line segment is in a half plane iff one of the endpoints is contained in the half
+            // plane. Then, by checking that the line is in the 4 half-planes defined by the
+            // north/south/east/west sides of the clip rectangle, we can determine if the line is
+            // in the clip rectangle.
+            let x_min = s.position.0 >= clip_rect.min.x || e.position.0 >= clip_rect.min.x;
+            let y_min = s.position.1 >= clip_rect.min.y || e.position.1 >= clip_rect.min.y;
+            let x_max = s.position.0 <= clip_rect.max.x || e.position.0 <= clip_rect.max.x;
+            let y_max = s.position.1 <= clip_rect.max.y || e.position.1 <= clip_rect.max.y;
+            if !(x_min && y_min && x_max && y_max) {
                 continue;
             }
 
