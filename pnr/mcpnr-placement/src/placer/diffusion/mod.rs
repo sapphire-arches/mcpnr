@@ -125,20 +125,6 @@ impl DiffusionPlacer {
             }
         }
 
-        // Fill the margins with some high density value to encourage cell movement away from the
-        // absolute edges.
-        let margin_fill = (self.region_size as f32).powi(3) * 8.0;
-        for axis in 0..3 {
-            let axis = Axis(axis);
-            Zip::from(self.density.slice_axis_mut(axis, Slice::new(0, Some(1), 1)))
-                .for_each(|v| *v = margin_fill);
-            Zip::from(
-                self.density
-                    .slice_axis_mut(axis, Slice::new(-1, Some(-1), 1)),
-            )
-            .for_each(|v| *v = margin_fill);
-        }
-
         // Push the density up globaly to avoid zeros, and better represent the actual desired end
         // state where all cells are target_ratio full
 
