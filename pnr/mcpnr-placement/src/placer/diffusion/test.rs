@@ -4,7 +4,7 @@ use approx::assert_relative_eq;
 use ndarray::s;
 
 fn test_diffuser() -> DiffusionPlacer {
-    DiffusionPlacer::new(16, 16, 16, 2)
+    DiffusionPlacer::new(16, 16, 16, 0.0, 2)
 }
 
 #[test]

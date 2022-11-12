@@ -48,6 +48,7 @@ impl UIState {
             config.size_x.try_into().unwrap(),
             config.size_y.try_into().unwrap(),
             config.size_z.try_into().unwrap(),
+            0.2,
             4,
         );
 
@@ -175,6 +176,7 @@ fn run_density(
         config.size_x.try_into().context("Convert X size")?,
         config.size_y.try_into().context("Convert Y size")?,
         config.size_z.try_into().context("Convert Z size")?,
+        0.2,
         2,
     );
 

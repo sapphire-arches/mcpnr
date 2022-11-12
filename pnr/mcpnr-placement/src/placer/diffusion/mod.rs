@@ -1,3 +1,4 @@
+use approx::abs_diff_eq;
 use log::info;
 use ndarray::{s, Array3, Axis, Slice, Zip};
 use tracing::info_span;
@@ -20,6 +21,9 @@ mod test;
 pub struct DiffusionPlacer {
     /// Size of each diffusion region.
     pub region_size: usize,
+    /// Target cell fill ratio
+    pub target_ratio: f32,
+
     /// The amount of cell volume contained in each placer region
     pub density: Array3<f32>,
     /// X velocity field
@@ -39,7 +43,7 @@ impl DiffusionPlacer {
     /// We add 2 cells to act as a border across which cells cannot traverse, without having to
     /// deal with the complexity of ensuring nonzero velocity to push cells off the borders of the
     /// placement region.
-    pub fn new(size_x: usize, size_y: usize, size_z: usize, region_size: usize) -> Self {
+    pub fn new(size_x: usize, size_y: usize, size_z: usize, target_ratio: f32, region_size: usize) -> Self {
         // TODO: handle this more gracefully
         assert!(size_x % region_size == 0);
         assert!(size_y % region_size == 0);
@@ -54,6 +58,7 @@ impl DiffusionPlacer {
         Self {
             region_size,
             density: Array3::zeros(shape),
+            target_ratio,
             vel_x: Array3::zeros(shape),
             vel_y: Array3::zeros(shape),
             vel_z: Array3::zeros(shape),
@@ -132,6 +137,20 @@ impl DiffusionPlacer {
                     .slice_axis_mut(axis, Slice::new(-1, Some(-1), 1)),
             )
             .for_each(|v| *v = margin_fill);
+        }
+
+        // Push the density up globaly to avoid zeros, and better represent the actual desired end
+        // state where all cells are target_ratio full
+
+        let volume = size_x * size_y * size_z;
+        let target_mass = self.target_ratio * volume * (region_size_f.powi(3));
+        let total_real_mass = self.density.sum();
+        let extra_density = (target_mass - total_real_mass) / volume;
+        if extra_density < 0.0 {
+            log::warn!("Overall grid is overfilled, can not add baseline density (real mass: {total_real_mass} > target_mass: {target_mass})");
+        } else {
+            let extra_density_per_cell = extra_density / volume;
+            Zip::from(&mut self.density).for_each(|d| *d += extra_density_per_cell);
         }
     }
 

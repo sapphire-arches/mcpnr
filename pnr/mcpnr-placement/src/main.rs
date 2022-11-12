@@ -134,6 +134,7 @@ fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()>
                     config.size_x.try_into().context("Convert X size")?,
                     config.size_y.try_into().context("Convert Y size")?,
                     config.size_z.try_into().context("Convert Z size")?,
+                    0.8,
                     2,
                 );
 
