@@ -197,16 +197,16 @@ fn vel_simple() {
     diffuser.compute_velocities();
 
     assert_relative_eq!(diffuser.vel_x[(3, 3, 3)], 0.0);
-    assert_relative_eq!(diffuser.vel_x[(2, 3, 3)], 0.5);
-    assert_relative_eq!(diffuser.vel_x[(4, 3, 3)], -0.5);
+    assert_relative_eq!(diffuser.vel_x[(2, 3, 3)], -0.5);
+    assert_relative_eq!(diffuser.vel_x[(4, 3, 3)], 0.5);
 
     assert_relative_eq!(diffuser.vel_y[(3, 3, 3)], 0.0);
-    assert_relative_eq!(diffuser.vel_y[(3, 2, 3)], 0.5);
-    assert_relative_eq!(diffuser.vel_y[(3, 4, 3)], -0.5);
+    assert_relative_eq!(diffuser.vel_y[(3, 2, 3)], -0.5);
+    assert_relative_eq!(diffuser.vel_y[(3, 4, 3)], 0.5);
 
     assert_relative_eq!(diffuser.vel_z[(3, 3, 3)], 0.0);
-    assert_relative_eq!(diffuser.vel_z[(3, 3, 2)], 0.5);
-    assert_relative_eq!(diffuser.vel_z[(3, 3, 4)], -0.5);
+    assert_relative_eq!(diffuser.vel_z[(3, 3, 2)], -0.5);
+    assert_relative_eq!(diffuser.vel_z[(3, 3, 4)], 0.5);
 }
 
 #[test]

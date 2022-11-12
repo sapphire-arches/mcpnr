@@ -152,7 +152,13 @@ impl DiffusionPlacer {
                 .and(self.density.slice_axis(axis, Slice::from(1isize..-1)))
                 .and(self.density.slice_axis(axis, Slice::from(2isize..)))
                 .and(self.density.slice_axis(axis, Slice::from(..-2isize)))
-                .for_each(|v, z, p, n| *v = (n - p) / (-2.0 * z));
+                .for_each(|v, z, p, n| {
+                    if abs_diff_eq!(*z, 0.0) {
+                        *v = 0.0;
+                    } else {
+                        *v = (n - p) / (2.0 * z);
+                    }
+                });
         }
     }
 
