@@ -3,7 +3,7 @@ use log::info;
 use ndarray::{s, Array3, Axis, Slice, Zip};
 use tracing::info_span;
 
-use crate::core::NetlistHypergraph;
+use crate::{config::{Config, DiffusionConfig}, core::NetlistHypergraph};
 
 #[cfg(test)]
 mod test;
@@ -43,22 +43,21 @@ impl DiffusionPlacer {
     /// We add 2 cells to act as a border across which cells cannot traverse, without having to
     /// deal with the complexity of ensuring nonzero velocity to push cells off the borders of the
     /// placement region.
-    pub fn new(size_x: usize, size_y: usize, size_z: usize, target_ratio: f32, region_size: usize) -> Self {
+    pub fn new(config: &Config, diffusion_config: &DiffusionConfig) -> Self {
         // TODO: handle this more gracefully
-        assert!(size_x % region_size == 0);
-        assert!(size_y % region_size == 0);
-        assert!(size_z % region_size == 0);
+        assert!(config.geometry.size_x % diffusion_config.region_size == 0);
+        assert!(config.geometry.size_z % diffusion_config.region_size == 0);
 
         let shape = [
-            2 + size_x / region_size,
-            2 + size_y / region_size,
-            2 + size_z / region_size,
+            2 + (config.geometry.size_x / diffusion_config.region_size) as usize,
+            2 + (config.geometry.size_y / diffusion_config.region_size) as usize,
+            2 + (config.geometry.size_z / diffusion_config.region_size) as usize,
         ];
 
         Self {
-            region_size,
+            region_size: diffusion_config.region_size as usize,
             density: Array3::zeros(shape),
-            target_ratio,
+            target_ratio: config.geometry.target_fill,
             vel_x: Array3::zeros(shape),
             vel_y: Array3::zeros(shape),
             vel_z: Array3::zeros(shape),

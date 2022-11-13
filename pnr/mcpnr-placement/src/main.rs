@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use clap::{Arg, Command};
+use config::PlacementStep;
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
 use mcpnr_common::protos::yosys::pb::parameter::Value as YPValue;
@@ -9,15 +10,14 @@ use placer::analytical::{
     AnchoredByNet, Clique, DecompositionStrategy, MoveableStar, ThresholdCrossover,
 };
 use placer::diffusion::DiffusionPlacer;
-use std::convert::TryInto;
-use std::path::PathBuf;
 use tracing::info_span;
 use tracing_subscriber::fmt::format::FmtSpan;
 
+use crate::config::Config;
 use crate::core::NetlistHypergraph;
 
-mod core;
 mod config;
+mod core;
 mod gui;
 mod placement_cell;
 pub mod placer;
@@ -64,10 +64,10 @@ The technology library is expected to be a folder, containing a folder named \"s
 }
 
 fn load_design(config: &Config) -> Result<Design> {
-    let inf = std::fs::read(&config.input_file)
-        .with_context(|| anyhow!("Open input file {:?}", config.input_file))?;
+    let inf = std::fs::read(&config.io.input_file)
+        .with_context(|| anyhow!("Open input file {:?}", config.io.input_file))?;
     Design::decode(&inf[..])
-        .with_context(|| anyhow!("Failed to parse file {:?}", config.input_file))
+        .with_context(|| anyhow!("Failed to parse file {:?}", config.io.input_file))
 }
 
 fn load_cells(config: &Config, design: Design) -> Result<(NetlistHypergraph, String)> {
@@ -82,7 +82,7 @@ fn load_cells(config: &Config, design: Design) -> Result<(NetlistHypergraph, Str
         })
         .ok_or_else(|| anyhow!("Failed to locate top module"))?;
 
-    let mut cell_factory = CellFactory::new(config.structure_directory.clone());
+    let mut cell_factory = CellFactory::new(config.io.structure_directory.clone());
 
     let cells = NetlistHypergraph::from_module(top_module, &mut cell_factory)
         .with_context(|| "Extract cells")?;
@@ -91,39 +91,47 @@ fn load_cells(config: &Config, design: Design) -> Result<(NetlistHypergraph, Str
 }
 
 fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()> {
-    // Initial placement
-    let mut strategy = ThresholdCrossover::new(4, Clique::new(), MoveableStar::new());
-    strategy.execute(cells)?;
+    for step in &config.schedule.schedule {
+        match step {
+            PlacementStep::UnconstrainedWirelength { clique_threshold } => {
+                let mut strategy =
+                    ThresholdCrossover::new(*clique_threshold, Clique::new(), MoveableStar::new());
+                strategy.execute(cells)?;
+            }
+            PlacementStep::Diffusion {
+                config: diffusion_config,
+                clique_threshold,
+                iterations,
+            } => {
+                // Iterate between diffusion and some light analytic recover
+                for wide_iteration in 0..*iterations {
+                    let _span =
+                        info_span!("Density placement", iteration = wide_iteration).entered();
 
-    for wide_iteration in 0..256 {
-        // Density-driven cell spreading
-        info_span!("Density placement", iteration = wide_iteration).in_scope(
-            || -> Result<()> {
-                let mut density = DiffusionPlacer::new(
-                    config.size_x.try_into().context("Convert X size")?,
-                    config.size_y.try_into().context("Convert Y size")?,
-                    config.size_z.try_into().context("Convert Z size")?,
-                    0.8,
-                    2,
-                );
+                    let mut density = DiffusionPlacer::new(&config, &diffusion_config);
 
-                density.splat(cells);
+                    density.splat(cells);
 
-                for narrow_iteration in 0..128 {
-                    let _span = info_span!("narrow_iteration", narrow_iteration = narrow_iteration)
-                        .entered();
-                    density.compute_velocities();
-                    density.move_cells(cells, 0.1);
-                    density.step_time(0.1);
+                    // Diffusion simulation
+                    for narrow_iteration in 0..128 {
+                        let _span =
+                            info_span!("narrow_iteration", narrow_iteration = narrow_iteration)
+                                .entered();
+                        density.compute_velocities();
+                        density.move_cells(cells, 0.1);
+                        density.step_time(0.1);
+                    }
+
+                    // Analytic wirelength recovery phase
+                    let mut strategy = ThresholdCrossover::new(
+                        *clique_threshold,
+                        Clique::new(),
+                        AnchoredByNet::new(),
+                    );
+                    strategy.execute(cells)?;
                 }
-
-                Ok(())
-            },
-        )?;
-
-        // Analytic wirerecovery
-        let mut strategy = ThresholdCrossover::new(2, Clique::new(), AnchoredByNet::new());
-        strategy.execute(cells)?;
+            }
+        }
     }
 
     Ok(())
@@ -142,17 +150,21 @@ fn run_placement(config: &Config) -> Result<()> {
     let design = load_design(config).with_context(|| anyhow!("Load design"))?;
 
     let placed_design = place(&config, design)
-        .with_context(|| anyhow!("Place design from {:?}", config.input_file))?;
+        .with_context(|| anyhow!("Place design from {:?}", config.io.input_file))?;
 
     {
         use std::io::Write;
-        let mut outf = std::fs::File::create(&config.output_file).with_context(|| {
-            anyhow!("Failed to open/create output file {:?}", config.output_file)
+        let mut outf = std::fs::File::create(&config.io.output_file).with_context(|| {
+            anyhow!(
+                "Failed to open/create output file {:?}",
+                config.io.output_file
+            )
         })?;
         let encoded = placed_design.encode_to_vec();
 
-        outf.write_all(&encoded[..])
-            .with_context(|| anyhow!("Failed to write to output file {:?}", config.output_file))?;
+        outf.write_all(&encoded[..]).with_context(|| {
+            anyhow!("Failed to write to output file {:?}", config.io.output_file)
+        })?;
     }
 
     Ok(())

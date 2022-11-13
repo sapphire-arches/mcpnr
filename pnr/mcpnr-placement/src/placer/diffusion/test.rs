@@ -1,10 +1,33 @@
+use std::path::PathBuf;
+
 use super::DiffusionPlacer;
-use crate::netlist;
+use crate::{config::Config, netlist};
 use approx::assert_relative_eq;
 use ndarray::s;
 
 fn test_diffuser() -> DiffusionPlacer {
-    DiffusionPlacer::new(16, 16, 16, 0.0, 2)
+    let config = Config {
+        io: crate::config::IOConfig {
+            input_file: PathBuf::new(),
+            output_file: PathBuf::new(),
+            structure_directory: PathBuf::new(),
+        },
+        geometry: crate::config::GeometryConfig {
+            size_x: 16,
+            size_y: 16,
+            size_z: 16,
+            target_fill: 0.0,
+        },
+        schedule: crate::config::PlacementSchedule { schedule: vec![] },
+    };
+
+    let diffusion_config = crate::config::DiffusionConfig {
+        region_size: 2,
+        iteration_count: 1,
+        delta_t: 0.1,
+    };
+
+    DiffusionPlacer::new(&config, &diffusion_config)
 }
 
 #[test]

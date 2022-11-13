@@ -40,11 +40,17 @@ pub struct DiffusionConfig {
 }
 
 /// Overall schedule for the placement strategy
+///
+/// TODO: we probably want some sort of dynamic scheduling, where the system pays attention to
+/// factors like cell overlap and whitespace to move between different placement strategies. Fixed
+/// schedules are probably fine for now though
+#[derive(Clone, Debug)]
 pub struct PlacementSchedule {
-    schedule: Vec<PlacementStep>,
+    pub schedule: Vec<PlacementStep>,
 }
 
 /// An individual step in the placement schedule
+#[derive(Clone, Debug)]
 pub enum PlacementStep {
     /// Basic unconstrained wirelength optimization
     UnconstrainedWirelength {
@@ -59,10 +65,10 @@ pub enum PlacementStep {
         config: DiffusionConfig,
         /// Threshold for switching between clique model and net-anchored model in the analytic
         /// wirelength recovery step.
-        clique_threshold: u32,
+        clique_threshold: usize,
         /// Number of diffusion/analytic iterations
         iterations: usize,
-    }
+    },
 }
 
 /// Overall placement configuration
@@ -70,7 +76,6 @@ pub enum PlacementStep {
 pub struct Config {
     pub io: IOConfig,
     pub geometry: GeometryConfig,
-    pub diffusion: DiffusionConfig,
     pub schedule: PlacementSchedule,
 }
 
@@ -98,10 +103,24 @@ impl Config {
                     .context("Parse SIZE_Z")?,
                 target_fill: 0.8,
             },
-            diffusion: DiffusionConfig {
-                region_size: 4,
-                iteration_count: 128,
-                delta_t: 0.1,
+            schedule: PlacementSchedule {
+                schedule: vec![
+                    // Initial unconstrained placement
+                    PlacementStep::UnconstrainedWirelength {
+                        clique_threshold: 4,
+                    },
+                    // Main diffusion steps
+                    PlacementStep::Diffusion {
+                        config: DiffusionConfig {
+                            region_size: 2,
+                            iteration_count: 256,
+                            delta_t: 0.1,
+                        },
+                        clique_threshold: 2,
+                        iterations: 256,
+                    },
+                    // TODO: legalization
+                ],
             },
         })
     }
