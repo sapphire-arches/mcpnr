@@ -91,7 +91,7 @@ impl AnalyticWirelengthProblem {
 
     /// Solve the problem
     pub fn solve(mut self) -> Result<(Array1<f32>, Array1<f32>, Array1<f32>)> {
-        let _span = tracing::info_span!("problem_solve", size = self.hessian.shape()[0]).entered();
+        let _span = tracing::debug_span!("problem_solve", size = self.hessian.shape()[0]).entered();
 
         for i in 0 .. self.hessian.shape()[0] {
             for j in i .. self.hessian.shape()[0] {
@@ -99,7 +99,7 @@ impl AnalyticWirelengthProblem {
             }
         }
 
-        let decomp = tracing::info_span!("invert_hessian").in_scope(|| -> Result<_> {
+        let decomp = tracing::debug_span!("invert_hessian").in_scope(|| -> Result<_> {
             self.hessian
                 .cholesky_inplace(UPLO::Lower)
                 .with_context(|| anyhow!("The hessian has become non-hermitian"))?;
@@ -110,17 +110,17 @@ impl AnalyticWirelengthProblem {
             })
         })?;
 
-        tracing::info_span!("solve_x").in_scope(|| {
+        tracing::debug_span!("solve_x").in_scope(|| {
             decomp
                 .solvec_inplace(&mut self.x_vector)
                 .with_context(|| anyhow!("Solve failed for X"))
         })?;
-        tracing::info_span!("solve_y").in_scope(|| {
+        tracing::debug_span!("solve_y").in_scope(|| {
             decomp
                 .solvec_inplace(&mut self.y_vector)
                 .with_context(|| anyhow!("Solve failed for Y"))
         })?;
-        tracing::info_span!("solve_z").in_scope(|| {
+        tracing::debug_span!("solve_z").in_scope(|| {
             decomp
                 .solvec_inplace(&mut self.z_vector)
                 .with_context(|| anyhow!("Solve failed for Z"))
@@ -184,11 +184,11 @@ pub trait DecompositionStrategy {
 
     /// Default execution implementation
     fn execute(&mut self, net: &mut NetlistHypergraph) -> Result<()> {
-        let _span = tracing::info_span!("analytical_strategy").entered();
+        let _span = tracing::debug_span!("analytical_strategy").entered();
 
         // 2 passes are required because we need to know the problem size up front, and that's only
         //   known by running analysis to allocate the extra entries.
-        tracing::info_span!("prepass").in_scope(|| {
+        tracing::debug_span!("prepass").in_scope(|| {
             self.reset();
             net.signals.iter().for_each(|signal| {
                 self.analyze(net, signal);
@@ -203,7 +203,7 @@ pub trait DecompositionStrategy {
         let weight: f32 = 1.0;
 
         // Second pass, actually does most of the work
-        tracing::info_span!("full_pass").in_scope(|| {
+        tracing::debug_span!("full_pass").in_scope(|| {
             self.reset();
             let strategies = net
                 .signals
@@ -280,7 +280,7 @@ pub trait DecompositionStrategy {
         // Actually solve the problem, and copy results back to the hypergraph
         let (x, y, z) = problem.solve().context("Final solve")?;
 
-        tracing::info_span!("writeback").in_scope(|| {
+        tracing::debug_span!("writeback").in_scope(|| {
             for (i, cell) in net.cells.iter_mut().take(net.mobile_cell_count).enumerate() {
                 debug_assert!(!cell.pos_locked);
 

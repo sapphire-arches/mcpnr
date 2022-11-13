@@ -1,9 +1,12 @@
 use approx::abs_diff_eq;
-use log::info;
+use log::debug;
 use ndarray::{s, Array3, Axis, Slice, Zip};
-use tracing::info_span;
+use tracing::debug_span;
 
-use crate::{config::{Config, DiffusionConfig}, core::NetlistHypergraph};
+use crate::{
+    config::{Config, DiffusionConfig},
+    core::NetlistHypergraph,
+};
 
 #[cfg(test)]
 mod test;
@@ -144,7 +147,7 @@ impl DiffusionPlacer {
     /// Assumes the area outside the grid is overfilled by a factor of 8, to encourage cells to
     /// leave the border of the chip.
     pub fn compute_velocities(&mut self) {
-        let _span = info_span!("Computing velocities").entered();
+        let _span = debug_span!("velocity").entered();
         // Implements:
         //   v_0(x, y, z) = - (d(x+1) - d(x - 1)) / (2 * d(x))
         let mut velocities = [&mut self.vel_x, &mut self.vel_y, &mut self.vel_z];
@@ -195,7 +198,6 @@ impl DiffusionPlacer {
             }
 
             if cell.y < 0.0 {
-                log::info!("{}", cell.y);
                 cell.y = 0.0;
                 skip_cell_low_count[1] += 1;
                 skip_cell = true;
@@ -275,7 +277,7 @@ impl DiffusionPlacer {
             }
         }
 
-        info!("Skipped {skip_cell_count}/{} for fix/lo/hi {skip_cell_fixed_counter}/{skip_cell_low_count:?}/{skip_cell_high_count:?}", net.cells.len());
+        debug!("Skipped {skip_cell_count}/{} for fix/lo/hi {skip_cell_fixed_counter}/{skip_cell_low_count:?}/{skip_cell_high_count:?}", net.cells.len());
     }
 
     /// Step the density forward in time.

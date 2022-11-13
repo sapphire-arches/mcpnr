@@ -10,7 +10,7 @@ use placer::analytical::{
     AnchoredByNet, Clique, DecompositionStrategy, MoveableStar, ThresholdCrossover,
 };
 use placer::diffusion::DiffusionPlacer;
-use tracing::info_span;
+use tracing::{debug_span, info_span};
 use tracing_subscriber::fmt::format::FmtSpan;
 
 use crate::config::Config;
@@ -91,9 +91,11 @@ fn load_cells(config: &Config, design: Design) -> Result<(NetlistHypergraph, Str
 }
 
 fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()> {
+    let _span = info_span!("overall_place").entered();
     for step in &config.schedule.schedule {
         match step {
             PlacementStep::UnconstrainedWirelength { clique_threshold } => {
+                let _span = info_span!("unconstrained").entered();
                 let mut strategy =
                     ThresholdCrossover::new(*clique_threshold, Clique::new(), MoveableStar::new());
                 strategy.execute(cells)?;
@@ -103,10 +105,11 @@ fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()>
                 clique_threshold,
                 iterations,
             } => {
+                let _span = info_span!("diffusion").entered();
                 // Iterate between diffusion and some light analytic recover
                 for wide_iteration in 0..*iterations {
                     let _span =
-                        info_span!("Density placement", iteration = wide_iteration).entered();
+                        debug_span!("wide_iteration", wide_iteration = wide_iteration).entered();
 
                     let mut density = DiffusionPlacer::new(&config, &diffusion_config);
 
@@ -115,7 +118,7 @@ fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()>
                     // Diffusion simulation
                     for narrow_iteration in 0..128 {
                         let _span =
-                            info_span!("narrow_iteration", narrow_iteration = narrow_iteration)
+                            debug_span!("narrow_iteration", narrow_iteration = narrow_iteration)
                                 .entered();
                         density.compute_velocities();
                         density.move_cells(cells, 0.1);
