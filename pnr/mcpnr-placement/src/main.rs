@@ -17,41 +17,10 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use crate::core::NetlistHypergraph;
 
 mod core;
+mod config;
 mod gui;
 mod placement_cell;
 pub mod placer;
-
-#[derive(Clone, Debug)]
-struct Config {
-    input_file: PathBuf,
-    output_file: PathBuf,
-    structure_directory: PathBuf,
-    size_x: u32,
-    size_y: u32,
-    size_z: u32,
-}
-
-impl Config {
-    fn from_args(matches: &clap::ArgMatches) -> Result<Self> {
-        let techlib_directory = PathBuf::from(matches.value_of_os("TECHLIB").unwrap());
-        Ok(Config {
-            input_file: PathBuf::from(matches.value_of_os("INPUT").unwrap()),
-            output_file: PathBuf::from(matches.value_of_os("OUTPUT").unwrap()),
-            structure_directory: techlib_directory.join("structures"),
-            size_x: matches
-                .value_of("SIZE_X")
-                .unwrap()
-                .parse()
-                .context("Parse SIZE_X")?,
-            size_y: 4,
-            size_z: matches
-                .value_of("SIZE_Z")
-                .unwrap()
-                .parse()
-                .context("Parse SIZE_Z")?,
-        })
-    }
-}
 
 fn add_common_args<'help>(command: Command<'help>) -> Command<'help> {
     command
