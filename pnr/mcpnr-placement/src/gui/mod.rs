@@ -48,7 +48,6 @@ impl UIState {
             delta_t: 0.1,
         };
 
-        // TODO: use this placer for the actual diffusion placement
         let diffusion_placer = DiffusionPlacer::new(&config, &diffusion_config);
 
         Self {
@@ -72,19 +71,33 @@ impl UIState {
             1..=1024,
         ));
 
+        ui.horizontal(|ui| {
+            if ui.button("Resplat").clicked() {
+                self.diffusion_placer.splat(&self.cells)
+            }
+
+            if ui.button("SingleStep").clicked() {
+                self.diffusion_placer.compute_velocities();
+                self.diffusion_placer
+                    .move_cells(&mut self.cells, self.diffusion_config.delta_t);
+                self.diffusion_placer
+                    .step_time(self.diffusion_config.delta_t);
+            }
+        });
+
         if ui.button("Run").clicked() {
             let _span = info_span!("diffusion").entered();
 
-            let mut density = DiffusionPlacer::new(&self.config, &self.diffusion_config);
-
-            density.splat(&self.cells);
+            self.diffusion_placer.splat(&self.cells);
 
             for iteration in 0..self.diffusion_config.iteration_count {
                 let _span = info_span!("diffusion_iteration", iteration = iteration).entered();
 
-                density.compute_velocities();
-                density.move_cells(&mut self.cells, self.diffusion_config.delta_t);
-                density.step_time(self.diffusion_config.delta_t);
+                self.diffusion_placer.compute_velocities();
+                self.diffusion_placer
+                    .move_cells(&mut self.cells, self.diffusion_config.delta_t);
+                self.diffusion_placer
+                    .step_time(self.diffusion_config.delta_t);
             }
         }
     }
