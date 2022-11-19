@@ -143,9 +143,6 @@ impl DiffusionPlacer {
     }
 
     /// Compute the flow velocities, based on the current density in each region.
-    ///
-    /// Assumes the area outside the grid is overfilled by a factor of 8, to encourage cells to
-    /// leave the border of the chip.
     pub fn compute_velocities(&mut self) {
         let _span = debug_span!("velocity").entered();
         // Implements:

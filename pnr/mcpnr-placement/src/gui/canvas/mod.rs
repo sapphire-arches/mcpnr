@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::atomic::AtomicU64};
 use egui::{Key, Vec2, Widget, WidgetInfo};
 use itertools::Itertools;
 use nalgebra as na;
+use ndarray::Zip;
 
 use crate::{core::NetlistHypergraph, placer::diffusion::DiffusionPlacer};
 
@@ -256,6 +257,28 @@ impl Canvas {
                                 },
                             )
                         }))
+                })
+                .chain({
+                    // Velocity rendering
+
+                    diffusion.vel_x.indexed_iter().map(|(pos, x_vel)| {
+                        let pos_scale = diffusion.region_size as f32;
+                        let z_vel = diffusion.vel_z[pos];
+
+                        let base_pos = (pos.0 as f32 * pos_scale, pos.2 as f32 * pos_scale);
+                        const SCALE: f32 = 10.0;
+
+                        (
+                            lines::Vertex {
+                                color: egui::Color32::KHAKI,
+                                position: base_pos,
+                            },
+                            lines::Vertex {
+                                color: egui::Color32::KHAKI,
+                                position: (base_pos.0 + x_vel * SCALE, base_pos.1 + z_vel * SCALE),
+                            },
+                        )
+                    })
                 }),
         );
 
