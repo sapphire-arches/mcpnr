@@ -37,7 +37,7 @@
             inherit system;
             overlays = [
               amulet.overlay
-              fenix.overlay
+              fenix.overlays.default
               self.overlay
             ];
           };
