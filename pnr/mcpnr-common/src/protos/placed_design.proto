@@ -2,7 +2,56 @@ syntax = "proto3";
 
 package mcpnr;
 
-import 'yosys.proto';
+/*******************************************************************************
+  Taken from the old yosys protobuf implementation
+*******************************************************************************/
+
+// A signal in the design - either a unique identifier for one, or a constant
+// driver (low or high).
+message Signal {
+    // A constant signal driver in the design.
+    enum ConstantDriver {
+        CONSTANT_DRIVER_INVALID = 0;
+        CONSTANT_DRIVER_LOW = 1;
+        CONSTANT_DRIVER_HIGH = 2;
+        CONSTANT_DRIVER_Z = 3;
+        CONSTANT_DRIVER_X = 4;
+    }
+    oneof type {
+        // Signal uniquely identified by ID number.
+        int64 id = 1;
+        // Constant driver.
+        ConstantDriver constant = 2;
+    }
+}
+
+// A freeform parameter/attribute value.
+message Parameter {
+    oneof value {
+        int64 int = 1;
+        string str = 2;
+    }
+}
+
+// A vector of signals.
+message BitVector {
+    repeated Signal signal = 1;
+}
+
+// Nets in a module
+message NetMetadata {
+    // Set to true when the name of this net is automatically created and
+    // likely not of interest for a regular user.
+    bool hide_name = 1;
+    // Signal(s) that make up this net.
+    BitVector bits = 2;
+    // Freeform attributes.
+    map<string, Parameter> attributes = 3;
+}
+
+/*******************************************************************************
+  Local stuff
+*******************************************************************************/
 
 message Position {
   uint32 x = 1;
@@ -24,14 +73,15 @@ message PlacedDesign {
         Position pos = 2;
 
         // Freeform parameters.
-        map<string, yosys.pb.Parameter> parameter = 3;
+        map<string, Parameter> parameter = 3;
         // Freeform attributes.
-        map<string, yosys.pb.Parameter> attribute = 4;
+        map<string, Parameter> attribute = 4;
 
         // Connection of named port to signal(s).
-        map<string, yosys.pb.BitVector> connection = 5;
+        map<string, BitVector> connection = 5;
     }
+
     repeated Cell cells = 3;
 
-    repeated yosys.pb.Module.Netname nets = 4;
+    map<string, NetMetadata> nets = 4;
 }

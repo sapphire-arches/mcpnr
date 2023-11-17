@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Context, Result};
-use mcpnr_common::protos::{
-    mcpnr::{placed_design::Cell, PlacedDesign, Position},
-    yosys::pb::{module::Netname, BitVector, Module, Parameter},
+use mcpnr_common::{
+    protos::mcpnr::{
+        parameter::Value, placed_design::Cell, signal::Type, BitVector, NetMetadata, Parameter,
+        PlacedDesign, Position,
+    },
+    yosys::{ConstOrSignal, Module},
 };
 
 use crate::placement_cell::{CellFactory, PlacementCell};
@@ -49,7 +52,7 @@ pub struct NetlistHypergraph {
     pub mobile_cell_count: usize,
 
     pub signals: Vec<Signal>,
-    pub net_names: Vec<Netname>,
+    pub net_names: HashMap<String, NetMetadata>,
 }
 
 impl NetlistHypergraph {
@@ -66,16 +69,18 @@ impl NetlistHypergraph {
             metadata: vec![],
             mobile_cell_count,
             signals,
-            net_names: vec![],
+            net_names: Default::default(),
         }
     }
 
+    /// Construct a placement cell from a Yosys module
     pub fn from_module(m: Module, cell_factory: &mut CellFactory) -> Result<Self> {
-        let mut cells = Vec::with_capacity(m.cell.len());
-        let mut metadata = Vec::with_capacity(m.cell.len());
+        let mut cells = Vec::with_capacity(m.cells.len());
+        let mut metadata = Vec::with_capacity(m.cells.len());
         let mut signals: HashMap<u64, Vec<usize>> = HashMap::new();
 
-        for (key, cell) in m.cell {
+        // For each cell in the module,
+        for (key, cell) in m.cells {
             let cell_idx = cells.len();
             cells.push(
                 cell_factory
@@ -83,24 +88,54 @@ impl NetlistHypergraph {
                     .with_context(|| anyhow!("Pushing cell {:?}", key))?,
             );
 
-            for (_, bits) in &cell.connection {
-                for signal in &bits.signal {
-                    use mcpnr_common::protos::yosys::pb::signal::Type;
-                    match signal.r#type {
-                        Some(Type::Id(i)) => signals
-                            .entry(i as u64)
-                            .or_insert_with(|| Vec::new())
-                            .push(cell_idx),
-                        _ => {}
-                    }
+            for (_, bits) in &cell.connections {
+                for signal in bits.iter() {
+                    signals
+                        .entry(*signal as u64)
+                        .or_insert_with(|| Vec::new())
+                        .push(cell_idx)
                 }
             }
 
             metadata.push(CellMetadata {
-                attributes: cell.attribute,
-                connection: cell.connection,
-                parameter: cell.parameter,
-                ty: cell.r#type,
+                attributes: cell
+                    .attributes
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            k,
+                            Parameter {
+                                value: Some(Value::Str(v)),
+                            },
+                        )
+                    })
+                    .collect(),
+                connection: cell
+                    .connections
+                    .into_iter()
+                    .map(|(k, v)| {
+                        let v = BitVector {
+                            signal: v
+                                .into_iter()
+                                .map(|s| mcpnr_common::protos::mcpnr::Signal {
+                                    r#type: Some(Type::Id(s)),
+                                })
+                                .collect(),
+                        };
+                        (k, v)
+                    })
+                    .collect(),
+                parameter: cell
+                    .parameters
+                    .into_iter()
+                    .map(|(k, v)| {
+                        let v = Parameter {
+                            value: Some(Value::Str(v)),
+                        };
+                        (k, v)
+                    })
+                    .collect(),
+                ty: cell.ty,
             })
         }
 
@@ -154,15 +189,52 @@ impl NetlistHypergraph {
             mobile_cell_count += 1;
         }
 
-        assert!(cells[0..mobile_cell_count].iter().all(|cell| !cell.pos_locked));
-        assert!(cells[mobile_cell_count..].iter().all(|cell| cell.pos_locked));
+        assert!(cells[0..mobile_cell_count]
+            .iter()
+            .all(|cell| !cell.pos_locked));
+        assert!(cells[mobile_cell_count..]
+            .iter()
+            .all(|cell| cell.pos_locked));
 
         Ok(Self {
             cells,
             metadata,
             mobile_cell_count, // Need to implement sort
             signals,
-            net_names: m.netname,
+            net_names: m
+                .netnames
+                .into_iter()
+                .map(|(k, v)| {
+                    let v = NetMetadata {
+                        hide_name: v.hide_name != 0,
+                        bits: Some(BitVector {
+                            signal: v
+                                .bits
+                                .into_iter()
+                                .map(|b| match b {
+                                    ConstOrSignal::Const(_) => todo!(),
+                                    ConstOrSignal::Signal(i) => {
+                                        mcpnr_common::protos::mcpnr::Signal {
+                                            r#type: Some(Type::Id(i)),
+                                        }
+                                    }
+                                })
+                                .collect(),
+                        }),
+                        attributes: v
+                            .attributes
+                            .into_iter()
+                            .map(|(k, v)| {
+                                let v = Parameter {
+                                    value: Some(Value::Str(v)),
+                                };
+                                (k, v)
+                            })
+                            .collect(),
+                    };
+                    (k, v)
+                })
+                .collect(),
         })
     }
 

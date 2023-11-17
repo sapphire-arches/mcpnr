@@ -3,7 +3,8 @@
 use anyhow::{anyhow, Context, Result};
 use mcpnr_common::{
     block_storage::{Block, BlockStorage, BlockTypeIndex, PropertyValue},
-    protos::{mcpnr::placed_design::Cell, CellExt},
+    protos::mcpnr::placed_design::Cell,
+    CellExt,
 };
 use std::collections::HashMap;
 

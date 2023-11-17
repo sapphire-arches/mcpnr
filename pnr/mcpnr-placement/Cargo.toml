@@ -18,6 +18,7 @@ nalgebra = "0.31"
 ndarray = "0.15"
 ndarray-linalg = { version = "0.15", features = ["netlib-system"]}
 quartz_nbt = { version = "0.2", features = [ "serde" ] }
+serde_json = "1"
 tracing = "0.1"
 winit = "0.27"
 

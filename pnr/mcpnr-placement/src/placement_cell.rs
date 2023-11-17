@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use mcpnr_common::{minecraft_types::Structure, protos::yosys::pb::module::Cell, protos::CellExt};
+use mcpnr_common::{minecraft_types::Structure, yosys::Cell, CellExt};
 use nalgebra::Vector3;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -119,7 +119,7 @@ impl CellFactory {
     }
 
     pub fn build_cell(&mut self, cell: &Cell) -> Result<PlacementCell> {
-        match cell.r#type.as_ref() {
+        match cell.ty.as_ref() {
             "MCPNR_SWITCHES" => self
                 .build_switches(cell)
                 .context("Failed to build switch module"),
@@ -128,7 +128,7 @@ impl CellFactory {
                 .context("Failed to build light module"),
             _ => self
                 .build_from_nbt(cell)
-                .with_context(|| anyhow!("Failed to build {} module", cell.r#type)),
+                .with_context(|| anyhow!("Failed to build {} module", cell.ty)),
         }
     }
 
@@ -161,7 +161,7 @@ impl CellFactory {
     }
 
     pub fn build_from_nbt<'design>(&mut self, cell: &Cell) -> Result<PlacementCell> {
-        let sd = self.load_structure(&cell.r#type)?;
+        let sd = self.load_structure(&cell.ty)?;
 
         Ok(PlacementCell {
             x: 0.0,

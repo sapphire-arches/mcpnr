@@ -3,8 +3,7 @@ use clap::{Arg, Command};
 use config::PlacementStep;
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
-use mcpnr_common::protos::yosys::pb::parameter::Value as YPValue;
-use mcpnr_common::protos::yosys::pb::{Design, Parameter};
+use mcpnr_common::yosys::Design;
 use placement_cell::CellFactory;
 use placer::analytical::{
     AnchoredByNet, Clique, DecompositionStrategy, MoveableStar, ThresholdCrossover,
@@ -64,27 +63,21 @@ The technology library is expected to be a folder, containing a folder named \"s
 }
 
 fn load_design(config: &Config) -> Result<Design> {
-    let inf = std::fs::read(&config.io.input_file)
+    let reader = std::fs::File::open(&config.io.input_file)
         .with_context(|| anyhow!("Open input file {:?}", config.io.input_file))?;
-    Design::decode(&inf[..])
-        .with_context(|| anyhow!("Failed to parse file {:?}", config.io.input_file))
+    let reader = std::io::BufReader::new(reader);
+    serde_json::from_reader(reader).with_context(|| anyhow!("Failed to parse reader"))
 }
 
 fn load_cells(config: &Config, design: Design) -> Result<(NetlistHypergraph, String)> {
     let top_module = design
         .modules
-        .into_values()
-        .find(|m| {
-            m.attribute.get("top")
-                == Some(&Parameter {
-                    value: Some(YPValue::Int(1)),
-                })
-        })
+        .get("top")
         .ok_or_else(|| anyhow!("Failed to locate top module"))?;
 
     let mut cell_factory = CellFactory::new(config.io.structure_directory.clone());
 
-    let cells = NetlistHypergraph::from_module(top_module, &mut cell_factory)
+    let cells = NetlistHypergraph::from_module(top_module.clone(), &mut cell_factory)
         .with_context(|| "Extract cells")?;
 
     Ok((cells, design.creator))

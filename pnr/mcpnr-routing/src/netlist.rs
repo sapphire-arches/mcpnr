@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use itertools::Itertools;
-use mcpnr_common::protos::{mcpnr::PlacedDesign, yosys::pb::signal::Type};
+use mcpnr_common::protos::mcpnr::{PlacedDesign, signal::Type};
 
 use crate::structure_cache::StructureCache;
 

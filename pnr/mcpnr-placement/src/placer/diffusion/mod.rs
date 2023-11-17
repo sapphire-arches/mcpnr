@@ -121,7 +121,7 @@ impl DiffusionPlacer {
                             advance_coord(&mut cell_x, cell_x_end, region_x, self.region_size);
 
                         let coord = (region_x, region_y, region_z);
-                        self.density[(coord)] += span_x * span_y * span_z;
+                        self.density[coord] += span_x * span_y * span_z;
                     }
                 }
             }
