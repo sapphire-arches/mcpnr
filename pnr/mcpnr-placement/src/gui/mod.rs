@@ -1,4 +1,5 @@
 use crate::{
+    center_all_moveable_cells,
     config::DiffusionConfig,
     core::NetlistHypergraph,
     load_cells, load_design, place_algorithm,
@@ -125,6 +126,10 @@ impl App for UIState {
                     Ok(_) => {}
                     Err(e) => log::error!("Placement failure: {:?}", e),
                 };
+            }
+
+            if ui.button("Center Cells").clicked() {
+                center_all_moveable_cells(&self.config, &mut self.cells);
             }
 
             ui.group(|ui| {

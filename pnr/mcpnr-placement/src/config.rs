@@ -52,6 +52,9 @@ pub struct PlacementSchedule {
 /// An individual step in the placement schedule
 #[derive(Clone, Debug)]
 pub enum PlacementStep {
+    /// Center all moveable cells in the placement region. This helps avoid the IO cells clumping
+    /// everything in to one of the edges.
+    CenterCells,
     /// Basic unconstrained wirelength optimization
     UnconstrainedWirelength {
         /// The threshold at which we switch from a clique model to a moveable star model in the
@@ -109,6 +112,8 @@ impl Config {
                     PlacementStep::UnconstrainedWirelength {
                         clique_threshold: 4,
                     },
+                    // Center cells as setup for diffusion
+                    PlacementStep::CenterCells,
                     // Main diffusion steps
                     PlacementStep::Diffusion {
                         config: DiffusionConfig {
@@ -117,7 +122,7 @@ impl Config {
                             delta_t: 0.1,
                         },
                         clique_threshold: 2,
-                        iterations: 256,
+                        iterations: 16,
                     },
                     // TODO: legalization
                 ],

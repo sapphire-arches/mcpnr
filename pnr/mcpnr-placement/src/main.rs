@@ -4,6 +4,7 @@ use config::PlacementStep;
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
 use mcpnr_common::yosys::Design;
+use nalgebra::Vector3;
 use placement_cell::CellFactory;
 use placer::analytical::{
     AnchoredByNet, Clique, DecompositionStrategy, MoveableStar, ThresholdCrossover,
@@ -83,10 +84,45 @@ fn load_cells(config: &Config, design: Design) -> Result<(NetlistHypergraph, Str
     Ok((cells, design.creator))
 }
 
+fn center_all_moveable_cells(config: &Config, cells: &mut NetlistHypergraph) {
+    let desired_center = Vector3::new(
+        config.geometry.size_x as f32,
+        config.geometry.size_y as f32,
+        config.geometry.size_z as f32,
+    ) / 2.0;
+
+    let mut current_center = Vector3::zeros();
+    let mut num_moveable_cells = 0;
+    for cell in cells.cells.iter_mut() {
+        if cell.pos_locked {
+            continue;
+        }
+        num_moveable_cells += 1;
+        current_center += cell.center_pos();
+    }
+
+    let num_moveable_cells = num_moveable_cells as f32;
+    current_center /= num_moveable_cells;
+
+    let delta = current_center - desired_center;
+
+    for cell in cells.cells.iter_mut() {
+        if cell.pos_locked {
+            continue;
+        }
+        cell.x -= delta.x;
+        cell.y -= delta.y;
+        cell.z -= delta.z;
+    }
+}
+
 fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()> {
     let _span = info_span!("overall_place").entered();
     for step in &config.schedule.schedule {
         match step {
+            PlacementStep::CenterCells => {
+                center_all_moveable_cells(config, cells);
+            }
             PlacementStep::UnconstrainedWirelength { clique_threshold } => {
                 let _span = info_span!("unconstrained").entered();
                 let mut strategy =
