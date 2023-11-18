@@ -28,6 +28,21 @@ pub enum ConstOrSignal {
     Signal(i64),
 }
 
+impl ConstOrSignal {
+    pub fn to_type(&self) -> crate::protos::mcpnr::signal::Type {
+        use crate::protos::mcpnr::signal::Type;
+
+        match self {
+            Self::Const(s) => match s.as_str() {
+                "0" => Type::Constant(0),
+                "1" => Type::Constant(1),
+                _ => Type::Constant(2),
+            },
+            Self::Signal(s) => Type::Constant((*s).try_into().unwrap()),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Port {
     direction: PortDirection,
@@ -44,7 +59,7 @@ pub struct Cell {
     /// Map from port name to direction
     pub port_directions: HashMap<String, PortDirection>,
     /// Map from port name to signal indexes
-    pub connections: HashMap<String, Vec<i64>>,
+    pub connections: HashMap<String, Vec<ConstOrSignal>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy)]

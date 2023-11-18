@@ -90,10 +90,15 @@ impl NetlistHypergraph {
 
             for (_, bits) in &cell.connections {
                 for signal in bits.iter() {
-                    signals
-                        .entry(*signal as u64)
-                        .or_insert_with(|| Vec::new())
-                        .push(cell_idx)
+                    match signal {
+                        ConstOrSignal::Const(_c) => {
+                            // log::warn!("Connection to a constant wire {c}")
+                        }
+                        ConstOrSignal::Signal(s) => signals
+                            .entry(*s as u64)
+                            .or_insert_with(|| Vec::new())
+                            .push(cell_idx),
+                    }
                 }
             }
 
@@ -118,7 +123,7 @@ impl NetlistHypergraph {
                             signal: v
                                 .into_iter()
                                 .map(|s| mcpnr_common::protos::mcpnr::Signal {
-                                    r#type: Some(Type::Id(s)),
+                                    r#type: Some(s.to_type()),
                                 })
                                 .collect(),
                         };
@@ -211,13 +216,8 @@ impl NetlistHypergraph {
                             signal: v
                                 .bits
                                 .into_iter()
-                                .map(|b| match b {
-                                    ConstOrSignal::Const(_) => todo!(),
-                                    ConstOrSignal::Signal(i) => {
-                                        mcpnr_common::protos::mcpnr::Signal {
-                                            r#type: Some(Type::Id(i)),
-                                        }
-                                    }
+                                .map(|b| mcpnr_common::protos::mcpnr::Signal {
+                                    r#type: Some(b.to_type()),
                                 })
                                 .collect(),
                         }),
