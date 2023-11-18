@@ -59,8 +59,8 @@ echo read_verilog ${MY_DIR}/mc_io.v >> ${YOSYS_SCRIPT_FILE}
 
 echo synth_mc -flatten -top mc_io_top -techlib ${MC_TECHLIB} >> ${YOSYS_SCRIPT_FILE}
 echo stat -liberty ${MC_TECHLIB}/minecraft.lib >> ${YOSYS_SCRIPT_FILE}
-
-echo write_protobuf ${BUILD_DIR}/${2}.yosys-design >> ${YOSYS_SCRIPT_FILE}
+echo rename mc_io_top top >> ${YOSYS_SCRIPT_FILE}
+echo write_json ${BUILD_DIR}/${2}.yosys-design >> ${YOSYS_SCRIPT_FILE}
 
 yosys -s ${YOSYS_SCRIPT_FILE} | tee ${YOSYS_LOG_FILE}
 
