@@ -44,6 +44,15 @@ pub struct Canvas {
 
     /// Center location for the render
     center: Vec2,
+
+    /// Maximum density observed
+    density_max: f32,
+
+    /// Minimum density observed
+    density_min: f32,
+
+    /// Selected layer
+    selected_layer: usize,
 }
 
 /// Ephermeral state, for use with `egui::Ui::add`
@@ -97,6 +106,9 @@ impl Canvas {
             id,
             pixels_per_unit: 16.0,
             center: Vec2::splat(0.0),
+            density_max: 0.0,
+            density_min: 0.0,
+            selected_layer: 0,
         }
     }
 
@@ -197,6 +209,21 @@ impl Canvas {
         .to_homogeneous()
             * projection_view.to_homogeneous();
 
+        let (density_min, density_max) = diffusion
+            .and_then(|d| {
+                d.density
+                    .iter()
+                    .copied()
+                    .minmax_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                    .into_option()
+            })
+            .unwrap_or((0.0, 0.0));
+
+        self.density_max = density_max;
+        self.density_min = density_min;
+
+        let selected_layer = self.selected_layer;
+
         self.render_lines(
             ui,
             projection_view,
@@ -262,7 +289,7 @@ impl Canvas {
                             let z_vel = diffusion.vel_z[pos];
 
                             let base_pos = (pos.0 as f32 * pos_scale, pos.2 as f32 * pos_scale);
-                            const SCALE: f32 = 10.0;
+                            const SCALE: f32 = 5.0;
 
                             (
                                 lines::Vertex {
@@ -275,6 +302,28 @@ impl Canvas {
                                         base_pos.0 + x_vel * SCALE,
                                         base_pos.1 + z_vel * SCALE,
                                     ),
+                                },
+                            )
+                        }))
+                        .chain((0..(size_x + 2) * (size_y + 2)).map(move |xy| {
+                            let x = xy / (size_y + 2);
+                            let y = xy % (size_y + 2);
+                            let fill_level =
+                                (diffusion.density.get((x, selected_layer, y)).unwrap()
+                                    - density_min)
+                                    / (density_max - density_min);
+
+                            let x = ((x as f32) - 0.5) * scale;
+                            let y = ((y as f32) - 0.9) * scale;
+
+                            (
+                                lines::Vertex {
+                                    color: egui::Color32::GREEN,
+                                    position: (x, y),
+                                },
+                                lines::Vertex {
+                                    color: egui::Color32::GOLD,
+                                    position: (x, y + fill_level),
                                 },
                             )
                         }))
@@ -328,10 +377,36 @@ impl<'a> Widget for CanvasWidget<'a> {
             egui::Layout::bottom_up(egui::Align::Min),
             |ui| {
                 let info_string = format!(
-                    "Scale: {:.02} X: {:0.2} Y: {:0.2}",
-                    self.canvas.pixels_per_unit, self.canvas.center.x, self.canvas.center.y,
+                    "Scale: {:.02} X: {:0.2} Y: {:0.2}, min/max density: {:}/{:}, layer: {}",
+                    self.canvas.pixels_per_unit,
+                    self.canvas.center.x,
+                    self.canvas.center.y,
+                    self.canvas.density_min,
+                    self.canvas.density_max,
+                    self.canvas.selected_layer,
                 );
                 ui.label(info_string);
+
+                ui.horizontal(|ui| match self.diffusion.map(|m| m.density.shape()) {
+                    Some(diffusion_shape) => {
+                        if ui.small_button("+").clicked() {
+                            if self.canvas.selected_layer + 1 < diffusion_shape[1] {
+                                self.canvas.selected_layer += 1;
+                            } else {
+                                self.canvas.selected_layer = 0;
+                            }
+                        }
+                        ui.label(format!("{}", self.canvas.selected_layer));
+                        if ui.small_button("-").clicked() {
+                            if self.canvas.selected_layer > 0 {
+                                self.canvas.selected_layer -= 1;
+                            } else {
+                                self.canvas.selected_layer = diffusion_shape[1] - 1;
+                            }
+                        }
+                    }
+                    None => {}
+                });
 
                 egui::Frame::canvas(ui.style())
                     .show(ui, |ui| {
