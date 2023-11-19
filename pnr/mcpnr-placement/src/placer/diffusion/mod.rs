@@ -87,11 +87,6 @@ impl DiffusionPlacer {
         // strategies are more efficient, e.g. iterating over the region grid instead and then
         // finding the cells in an acceleration structure.
         for cell in net.cells.iter() {
-            // Skip the cell if we're never going to move it
-            if cell.pos_locked {
-                continue
-            }
-
             // We add 1 after clamping to ensure placement inside the "live" region and not the
             let cell_x_start = region_size_f + cell.x.clamp(0.0, size_x * region_size_f);
             let cell_y_start = region_size_f + cell.y.clamp(0.0, size_y * region_size_f);
