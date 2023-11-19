@@ -62,6 +62,13 @@ impl DiffusionUIState {
                 self.diffusion_placer
                     .step_time(self.diffusion_config.delta_t);
             }
+
+            if ui.button("Dump to CSV").clicked() {
+                self.diffusion_placer
+                    .density
+                    .indexed_iter()
+                    .for_each(|(d, e)| println!("{:?} {}", d, e))
+            }
         });
 
         if ui.button("Run").clicked() {
