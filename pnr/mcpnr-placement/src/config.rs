@@ -119,7 +119,7 @@ impl Config {
                         config: DiffusionConfig {
                             region_size: 2,
                             iteration_count: 256,
-                            delta_t: 0.1,
+                            delta_t: 0.05,
                         },
                         clique_threshold: 2,
                         iterations: 16,
