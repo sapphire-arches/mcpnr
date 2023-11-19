@@ -87,15 +87,19 @@ impl DiffusionPlacer {
         // strategies are more efficient, e.g. iterating over the region grid instead and then
         // finding the cells in an acceleration structure.
         for cell in net.cells.iter() {
-            // We add 1 after clamping to ensure placement inside the "live" region and not the
-            // margins
-            let cell_x_start = region_size_f + cell.x.clamp(0.0, size_x);
-            let cell_y_start = region_size_f + cell.y.clamp(0.0, size_y);
-            let cell_z_start = region_size_f + cell.z.clamp(0.0, size_z);
+            // Skip the cell if we're never going to move it
+            if cell.pos_locked {
+                continue
+            }
 
-            let cell_x_end = region_size_f + (cell.x + cell.sx).clamp(0.0, size_x);
-            let cell_y_end = region_size_f + (cell.y + cell.sy).clamp(0.0, size_y);
-            let cell_z_end = region_size_f + (cell.z + cell.sz).clamp(0.0, size_z);
+            // We add 1 after clamping to ensure placement inside the "live" region and not the
+            let cell_x_start = region_size_f + cell.x.clamp(0.0, size_x * region_size_f);
+            let cell_y_start = region_size_f + cell.y.clamp(0.0, size_y * region_size_f);
+            let cell_z_start = region_size_f + cell.z.clamp(0.0, size_z * region_size_f);
+
+            let cell_x_end = region_size_f + (cell.x + cell.sx).clamp(0.0, size_x * region_size_f);
+            let cell_y_end = region_size_f + (cell.y + cell.sy).clamp(0.0, size_y * region_size_f);
+            let cell_z_end = region_size_f + (cell.z + cell.sz).clamp(0.0, size_z * region_size_f);
 
             let mut cell_x = cell_x_start;
             let mut cell_y = cell_y_start;
