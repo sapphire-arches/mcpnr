@@ -173,7 +173,7 @@ fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()>
                     // Diffusion simulation
                     for narrow_iteration in 0..128 {
                         let _span =
-                            info_span!("narrow_iteration", narrow_iteration = narrow_iteration)
+                            debug_span!("narrow_iteration", narrow_iteration = narrow_iteration)
                                 .entered();
                         density.compute_velocities();
                         density.move_cells(cells, diffusion_config.delta_t);
