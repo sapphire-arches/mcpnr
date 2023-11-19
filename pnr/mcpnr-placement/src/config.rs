@@ -98,7 +98,11 @@ impl Config {
                     .unwrap()
                     .parse()
                     .context("Parse SIZE_X")?,
-                size_y: 4,
+                size_y: matches
+                    .value_of("SIZE_Y")
+                    .unwrap()
+                    .parse()
+                    .context("Parse SIZE_Y")?,
                 size_z: matches
                     .value_of("SIZE_Z")
                     .unwrap()

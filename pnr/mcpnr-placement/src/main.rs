@@ -42,6 +42,12 @@ The technology library is expected to be a folder, containing a folder named \"s
                 .default_value("192"),
         )
         .arg(
+            Arg::new("SIZE_Y")
+                .long("size-y")
+                .value_name("SIZE_Y")
+                .default_value("4"),
+        )
+        .arg(
             Arg::new("SIZE_Z")
                 .long("size-z")
                 .value_name("SIZE_Z")
