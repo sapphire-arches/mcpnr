@@ -90,27 +90,47 @@ fn load_cells(config: &Config, design: Design) -> Result<(NetlistHypergraph, Str
     Ok((cells, design.creator))
 }
 
+fn min_f32(a: f32, b: f32) -> f32 {
+    if a < b {
+        a
+    } else {
+        b
+    }
+}
+
+fn max_f32(a: f32, b: f32) -> f32 {
+    if a > b {
+        a
+    } else {
+        b
+    }
+}
+
 fn center_all_moveable_cells(config: &Config, cells: &mut NetlistHypergraph) {
-    let desired_center = Vector3::new(
+    // Set our initial guess for the minimum position to the maximum
+    let mut current_min = Vector3::new(
         config.geometry.size_x as f32,
         config.geometry.size_y as f32,
         config.geometry.size_z as f32,
-    ) / 2.0;
+    );
+    // and use that handy value to compute the desired center
+    let desired_center = current_min / 2.0;
+    let mut current_max = Vector3::zeros();
 
-    let mut current_center = Vector3::zeros();
-    let mut num_moveable_cells = 0;
     for cell in cells.cells.iter_mut() {
         if cell.pos_locked {
             continue;
         }
-        num_moveable_cells += 1;
-        current_center += cell.center_pos();
+        current_max.x = max_f32(current_max.x, cell.x + cell.sx);
+        current_max.y = max_f32(current_max.y, cell.y + cell.sy);
+        current_max.z = max_f32(current_max.z, cell.z + cell.sz);
+
+        current_min.x = min_f32(current_min.x, cell.x + cell.sx);
+        current_min.y = min_f32(current_min.y, cell.y + cell.sy);
+        current_min.z = min_f32(current_min.z, cell.z + cell.sz);
     }
 
-    let num_moveable_cells = num_moveable_cells as f32;
-    current_center /= num_moveable_cells;
-
-    let delta = current_center - desired_center;
+    let delta = ((current_max - current_min) / 2.0) + current_min - desired_center;
 
     for cell in cells.cells.iter_mut() {
         if cell.pos_locked {
