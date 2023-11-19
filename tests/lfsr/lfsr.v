@@ -11,14 +11,19 @@ module top ();
     .O({clk, rst})
   );
 
-  MCPNR_LIGHTS #(
-    .POS_X(0),
-    .POS_Y(8),
-    .POS_Z(0),
-    .NLIGHT(64)
-  ) output_lights (
-    .I({lout})
-  );
+  genvar i;
+  generate
+    for (i = 0; i < 64; i = i + 1) begin
+      MCPNR_LIGHTS #(
+        .POS_X(0 + (i * 2)),
+        .POS_Y(8),
+        .POS_Z(0),
+        .NLIGHT(1)
+      ) output_lights (
+        .I({lout[i]})
+      );
+    end
+  endgenerate
 
   test_lfsr dut (.CLK(clk), .RST(rst), .OUTPUT(lout));
 endmodule
