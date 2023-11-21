@@ -5,6 +5,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 pub const XZ_EXPANSION: u32 = 0;
 
+/// Internal type containing the metadata we care about from a given cell's NBT data.
 pub(crate) struct PlacementStructureData {
     sx: u32,
     sy: u32,
@@ -19,6 +20,10 @@ pub struct CellFactory {
     structure_cache: HashMap<String, PlacementStructureData>,
 }
 
+/// Cell representation for global placement.
+/// The X and Z axies include the [`XZ_EXPANSION`] factor applied so the actual position of the
+/// cell should be `(self.x + XZ_EXPANSION, y, self.z + XZ_EXPANSION)` and the size is similarly
+/// `(sx - 2 * XZ_EXPANSION, sy, sz - 2 * XZ_EXPANSION)`
 #[derive(Debug)]
 pub struct PlacementCell {
     pub x: f32,
@@ -53,6 +58,33 @@ impl PlacementCell {
             self.y as f32 + (self.sy as f32 / 2.0),
             self.z as f32 + (self.sz as f32 / 2.0),
         )
+    }
+}
+
+/// Cell post-legalization.
+///
+/// This does *not* have the `XZ_EXPANSION`
+#[derive(Debug)]
+pub struct LegalizedCell {
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
+    pub sx: u32,
+    pub sy: u32,
+    pub sz: u32,
+}
+
+impl LegalizedCell {
+    /// Construct a [LegalizedCell] from a [PlacementCell]
+    pub fn from_placement(cell: &PlacementCell) -> Self {
+        Self {
+            x: (cell.x + XZ_EXPANSION as f32).round() as u32,
+            y: cell.y.round() as u32,
+            z: (cell.z + XZ_EXPANSION as f32).round() as u32,
+            sx: cell.sx.round() as u32 - 2 * XZ_EXPANSION,
+            sy: cell.sy.round() as u32,
+            sz: cell.sz.round() as u32 - 2 * XZ_EXPANSION,
+        }
     }
 }
 

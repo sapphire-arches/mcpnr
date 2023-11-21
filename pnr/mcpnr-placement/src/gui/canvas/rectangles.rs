@@ -168,6 +168,7 @@ impl Canvas {
         projection_view: na::Matrix4<f32>,
         render_rect: egui::Rect,
         clip_rect: egui::Rect,
+        color: egui::Color32,
         rectangles: impl Iterator<Item = egui::Rect>,
     ) {
         let mut count: IndexType = 0;
@@ -207,7 +208,12 @@ impl Canvas {
 
         let mut uniforms = Uniforms {
             projection_view: [0.0; 16],
-            color: [1.0, 0.0, 1.0, 1.0],
+            color: [
+                color.r() as f32 / 255.0,
+                color.g() as f32 / 255.0,
+                color.b() as f32 / 255.0,
+                color.a() as f32 / 255.0,
+            ]
         };
 
         assert_eq!(projection_view.as_slice().len(), 16);

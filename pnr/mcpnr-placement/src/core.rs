@@ -3,18 +3,22 @@ use std::collections::HashMap;
 use anyhow::{anyhow, Context, Result};
 use mcpnr_common::{
     protos::mcpnr::{
-        parameter::Value, placed_design::Cell, signal::Type, BitVector, NetMetadata, Parameter,
+        parameter::Value, placed_design::Cell, BitVector, NetMetadata, Parameter,
         PlacedDesign, Position,
     },
     yosys::{ConstOrSignal, Module},
 };
 
-use crate::placement_cell::{CellFactory, PlacementCell};
+use crate::placement_cell::{CellFactory, LegalizedCell, PlacementCell};
 
 pub struct CellMetadata {
+    /// Map from attribute name to value
     pub attributes: HashMap<String, Parameter>,
+    /// Map from port name to direction
     pub connection: HashMap<String, BitVector>,
+    /// Map from parameter name to parameter value
     pub parameter: HashMap<String, Parameter>,
+    /// Type of this cell (either a built-in magic cell, or the name of an NBT file)
     pub ty: String,
 }
 
@@ -238,7 +242,11 @@ impl NetlistHypergraph {
         })
     }
 
-    pub fn build_output(self, creator: String) -> PlacedDesign {
+    pub fn build_output(
+        self,
+        legalized_cells: Vec<LegalizedCell>,
+        creator: String,
+    ) -> PlacedDesign {
         PlacedDesign {
             creator: format!(
                 "Placed by MCPNR {}, Synth: {}",
@@ -246,23 +254,19 @@ impl NetlistHypergraph {
                 creator,
             ),
             nets: self.net_names,
-            cells: self
-                .cells
+            cells: legalized_cells
                 .into_iter()
                 .zip(self.metadata.into_iter())
-                .map(|(cell, meta)| {
-                    let pos = cell.unexpanded_pos();
-                    Cell {
-                        pos: Some(Position {
-                            x: pos[0],
-                            y: pos[1],
-                            z: pos[2],
-                        }),
-                        r#type: meta.ty,
-                        parameter: meta.parameter,
-                        attribute: meta.attributes,
-                        connection: meta.connection,
-                    }
+                .map(|(cell, meta)| Cell {
+                    pos: Some(Position {
+                        x: cell.x,
+                        y: cell.y,
+                        z: cell.z,
+                    }),
+                    r#type: meta.ty,
+                    parameter: meta.parameter,
+                    attribute: meta.attributes,
+                    connection: meta.connection,
                 })
                 .collect(),
         }

@@ -1,11 +1,12 @@
 use anyhow::{anyhow, Context, Result};
 use clap::{Arg, Command};
 use config::PlacementStep;
+use legalizer::{tetris::TetrisLegalizer, Legalizer};
 use mcpnr_common::prost::Message;
 use mcpnr_common::protos::mcpnr::PlacedDesign;
 use mcpnr_common::yosys::Design;
 use nalgebra::Vector3;
-use placement_cell::CellFactory;
+use placement_cell::{CellFactory, LegalizedCell};
 use placer::analytical::{
     AnchoredByNet, Clique, DecompositionStrategy, MoveableStar, ThresholdCrossover,
 };
@@ -19,6 +20,7 @@ use crate::core::NetlistHypergraph;
 mod config;
 mod core;
 mod gui;
+pub mod legalizer;
 mod placement_cell;
 pub mod placer;
 
@@ -206,13 +208,19 @@ fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()>
     Ok(())
 }
 
+fn legalize_algorithm(config: &Config, netlist: &NetlistHypergraph) -> Vec<LegalizedCell> {
+    TetrisLegalizer::new(config.legalizer.left_limit).legalize(&config.geometry, &netlist.cells)
+}
+
 fn place(config: &Config, design: Design) -> Result<PlacedDesign> {
     let (mut cells, creator) = load_cells(config, design).with_context(|| anyhow!("Load cells"))?;
 
     place_algorithm(&config, &mut cells)
         .with_context(|| anyhow!("Initial analytical placement"))?;
 
-    Ok(cells.build_output(creator))
+    let legalized_cells = legalize_algorithm(&config, &cells);
+
+    Ok(cells.build_output(legalized_cells, creator))
 }
 
 fn run_placement(config: &Config) -> Result<()> {

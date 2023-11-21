@@ -74,12 +74,23 @@ pub enum PlacementStep {
     },
 }
 
+/// Configuration for the legalizer.
+/// Currenetly directly the configuration for the TETRIS legalizer, but in principle this could be
+/// made an enumeration of configs for different legalizer types
+#[derive(Clone, Debug)]
+pub struct LegalizerConfig {
+    /// Left-hand limit (how far left of the original X position we're allowed to place a given
+    /// cell.)
+    pub left_limit: u32,
+}
+
 /// Overall placement configuration
 #[derive(Clone, Debug)]
 pub struct Config {
     pub io: IOConfig,
     pub geometry: GeometryConfig,
     pub schedule: PlacementSchedule,
+    pub legalizer: LegalizerConfig,
 }
 
 impl Config {
@@ -151,6 +162,7 @@ impl Config {
                     }),
                 ],
             },
+            legalizer: LegalizerConfig { left_limit: 8 },
         })
     }
 }

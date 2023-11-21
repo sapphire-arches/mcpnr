@@ -2,7 +2,9 @@ use crate::{
     center_all_moveable_cells,
     config::DiffusionConfig,
     core::NetlistHypergraph,
+    legalizer::{tetris::TetrisLegalizer, Legalizer},
     load_cells, load_design, place_algorithm,
+    placement_cell::LegalizedCell,
     placer::{
         analytical::{
             AnchoredByNet, Clique, DecompositionStrategy, MoveableStar, ThresholdCrossover,
@@ -36,6 +38,9 @@ struct UIState {
 
     // Diffusion placer state, if we're experimenting with one
     diffusion_state: Option<DiffusionUIState>,
+
+    // Legalized cells, if that pass has been run
+    legalized_cells: Option<Vec<LegalizedCell>>,
 
     // Net list properties
     cells: NetlistHypergraph,
@@ -122,6 +127,8 @@ impl UIState {
                 diffusion_placer,
             }),
 
+            legalized_cells: None,
+
             cells,
             creator,
             do_debug_render: false,
@@ -137,6 +144,7 @@ impl App for UIState {
         });
         egui::SidePanel::right("debug_panel").show(ctx, |ui| {
             if ui.button("Run placement").clicked() {
+                log::info!("{:?}", self.config.schedule);
                 match place_algorithm(&self.config, &mut self.cells) {
                     Ok(_) => {}
                     Err(e) => log::error!("Placement failure: {:?}", e),
@@ -203,6 +211,16 @@ impl App for UIState {
                 }
             });
 
+            ui.group(|ui| {
+                ui.heading("Legalization");
+
+                if ui.button("Legalize!").clicked() {
+                    let legalizer = TetrisLegalizer::new(self.config.legalizer.left_limit);
+                    self.legalized_cells =
+                        Some(legalizer.legalize(&self.config.geometry, &self.cells.cells));
+                }
+            });
+
             ui.collapsing("EGUI inspection", |ui| {
                 ui.checkbox(&mut self.do_debug_render, "Do debug rendering");
                 ctx.set_debug_on_hover(self.do_debug_render);
@@ -215,11 +233,13 @@ impl App for UIState {
                 }
             })
         });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.add(CanvasWidget::new(
                 &mut self.primary_canvas,
                 &self.cells,
                 self.diffusion_state.as_ref().map(|x| &x.diffusion_placer),
+                self.legalized_cells.as_ref().map(Vec::as_slice),
             ));
         });
     }

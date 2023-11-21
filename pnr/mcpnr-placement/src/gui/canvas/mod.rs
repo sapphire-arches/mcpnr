@@ -4,7 +4,9 @@ use egui::{Key, Vec2, Widget, WidgetInfo};
 use itertools::Itertools;
 use nalgebra as na;
 
-use crate::{core::NetlistHypergraph, placer::diffusion::DiffusionPlacer};
+use crate::{
+    core::NetlistHypergraph, placement_cell::LegalizedCell, placer::diffusion::DiffusionPlacer,
+};
 
 mod lines;
 mod rectangles;
@@ -60,6 +62,7 @@ pub struct CanvasWidget<'a> {
     canvas: &'a mut Canvas,
     cells: &'a NetlistHypergraph,
     diffusion: Option<&'a DiffusionPlacer>,
+    legalized_cells: Option<&'a [LegalizedCell]>,
 }
 
 impl CanvasGlobalResources {
@@ -117,6 +120,7 @@ impl Canvas {
         ui: &mut egui::Ui,
         cells: &NetlistHypergraph,
         diffusion: Option<&DiffusionPlacer>,
+        legalized_cells: Option<&[LegalizedCell]>,
     ) -> egui::Response {
         let (render_rect, response) =
             ui.allocate_at_least(ui.available_size(), egui::Sense::click_and_drag());
@@ -346,11 +350,37 @@ impl Canvas {
             render_rect,
             clip_rect,
             // Cell rendering
+            egui::Color32::from_rgba_unmultiplied(255, 0, 255, 255),
             cells.cells.iter().map(|cell| egui::Rect {
                 min: (cell.x, cell.z).into(),
                 max: (cell.x + cell.sx, cell.z + cell.sz).into(),
             }),
         );
+
+        if let Some(cells) = legalized_cells {
+            self.render_rectangles(
+                ui,
+                projection_view,
+                render_rect,
+                clip_rect,
+                egui::Color32::from_rgba_unmultiplied(0, 255, 255, 255),
+                cells.iter().filter_map(|cell| {
+                    if cell.y as usize == self.selected_layer {
+                        const INSET: f32 = 0.15;
+                        Some(egui::Rect {
+                            min: (cell.x as f32 + INSET, cell.z as f32 + INSET).into(),
+                            max: (
+                                (cell.x + cell.sx) as f32 - INSET,
+                                (cell.z + cell.sz) as f32 - INSET,
+                            )
+                                .into(),
+                        })
+                    } else {
+                        None
+                    }
+                }),
+            )
+        }
 
         response
     }
@@ -371,11 +401,13 @@ impl<'a> CanvasWidget<'a> {
         canvas: &'a mut Canvas,
         cells: &'a NetlistHypergraph,
         diffusion: Option<&'a DiffusionPlacer>,
+        legalized_cells: Option<&'a [LegalizedCell]>,
     ) -> Self {
         Self {
             canvas,
             cells,
             diffusion,
+            legalized_cells,
         }
     }
 }
@@ -420,7 +452,12 @@ impl<'a> Widget for CanvasWidget<'a> {
 
                 egui::Frame::canvas(ui.style())
                     .show(ui, |ui| {
-                        self.canvas.render_canvas(ui, self.cells, self.diffusion)
+                        self.canvas.render_canvas(
+                            ui,
+                            self.cells,
+                            self.diffusion,
+                            self.legalized_cells,
+                        )
                     })
                     .inner
             },
