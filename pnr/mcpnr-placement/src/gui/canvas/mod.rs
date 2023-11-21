@@ -22,11 +22,14 @@ pub struct CanvasGlobalResources {
     canvases: HashMap<CanvasId, CanvasRenderResources>,
 }
 
+const RECT_IDX_CELLS: usize = 0;
+const RECT_IDX_LEGAL: usize = 1;
+
 /// Per-canvas render resources
 struct CanvasRenderResources {
     /// Rectangle resources.
     /// TODO: make this optional, so we can have more specialized canvases and they're cheaper
-    rectangle: rectangles::RenderResources,
+    rectangle_resources: Vec<rectangles::RenderResources>,
 
     /// Line resources.
     /// TODO: make this optional, so we can have more specialized canvases and they're cheaper
@@ -99,7 +102,10 @@ impl Canvas {
         let id = CanvasId::allocate();
 
         let render_resources = CanvasRenderResources {
-            rectangle: global_resources.rectangle.create_local(device),
+            rectangle_resources: vec![
+                global_resources.rectangle.create_local(device),
+                global_resources.rectangle.create_local(device),
+            ],
             line: global_resources.line.create_local(device),
         };
 
@@ -351,6 +357,7 @@ impl Canvas {
             clip_rect,
             // Cell rendering
             egui::Color32::from_rgba_unmultiplied(255, 0, 255, 255),
+            RECT_IDX_CELLS,
             cells.cells.iter().map(|cell| egui::Rect {
                 min: (cell.x, cell.z).into(),
                 max: (cell.x + cell.sx, cell.z + cell.sz).into(),
@@ -364,9 +371,10 @@ impl Canvas {
                 render_rect,
                 clip_rect,
                 egui::Color32::from_rgba_unmultiplied(0, 255, 255, 255),
+                RECT_IDX_LEGAL,
                 cells.iter().filter_map(|cell| {
                     if cell.y as usize == self.selected_layer {
-                        const INSET: f32 = 0.15;
+                        const INSET: f32 = 0.05;
                         Some(egui::Rect {
                             min: (cell.x as f32 + INSET, cell.z as f32 + INSET).into(),
                             max: (

@@ -169,6 +169,7 @@ impl Canvas {
         render_rect: egui::Rect,
         clip_rect: egui::Rect,
         color: egui::Color32,
+        rect_idx: usize,
         rectangles: impl Iterator<Item = egui::Rect>,
     ) {
         let mut count: IndexType = 0;
@@ -213,7 +214,7 @@ impl Canvas {
                 color.g() as f32 / 255.0,
                 color.b() as f32 / 255.0,
                 color.a() as f32 / 255.0,
-            ]
+            ],
         };
 
         assert_eq!(projection_view.as_slice().len(), 16);
@@ -230,7 +231,7 @@ impl Canvas {
                     .unwrap();
 
                 let mut local_resources =
-                    &mut global_resources.canvases.get_mut(&id).unwrap().rectangle;
+                    &mut global_resources.canvases.get_mut(&id).unwrap().rectangle_resources[rect_idx];
 
                 let count: u64 = count.into();
                 if count > local_resources.count {
@@ -268,7 +269,7 @@ impl Canvas {
                 let local_resources = global_resources.canvases.get(&id).unwrap();
 
                 let global_resources = &global_resources.rectangle;
-                let local_resources = &local_resources.rectangle;
+                let local_resources = &local_resources.rectangle_resources[rect_idx];
 
                 rpass.set_pipeline(&global_resources.pipeline);
                 rpass.set_bind_group(0, &local_resources.bind_group, &[]);
