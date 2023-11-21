@@ -143,6 +143,13 @@ impl CellFactory {
                 sz: (((cell_extents.1).2) - ((cell_extents.0).2)) as u32 + 2 * XZ_EXPANSION,
             };
 
+            log::info!(
+                "Loaded {structure_name}. Size {}x{}x{}",
+                cell_data.sx,
+                cell_data.sy,
+                cell_data.sz
+            );
+
             Ok(self
                 .structure_cache
                 .entry(structure_name.to_owned())
@@ -151,6 +158,8 @@ impl CellFactory {
     }
 
     pub fn build_cell(&mut self, cell: &Cell) -> Result<PlacementCell> {
+        // TODO: maybe all these should output a sy of 1.0 since most of the rest of the code
+        // effectively already assumes that the y coordinate is in layers
         match cell.ty.as_ref() {
             "MCPNR_SWITCHES" => self
                 .build_switches(cell)
@@ -167,6 +176,9 @@ impl CellFactory {
     pub fn build_switches<'design>(&mut self, cell: &Cell) -> Result<PlacementCell> {
         let (x, y, z) = get_cell_pos(cell)?;
         let nswitches = cell.get_param_i64_with_default("NSWITCH", 1)?;
+        if x > 0 && z > 0 {
+            log::warn!("Switches located at (x,z) ({x}, {z}) will cause the legalizer to misbehave!");
+        }
         Ok(PlacementCell {
             x: x as f32,
             y: y as f32,
@@ -181,6 +193,9 @@ impl CellFactory {
     pub fn build_lights<'design>(&mut self, cell: &Cell) -> Result<PlacementCell> {
         let (x, y, z) = get_cell_pos(cell)?;
         let nlight = cell.get_param_i64_with_default("NLIGHT", 1)?;
+        if x > 0 && z > 0 {
+            log::warn!("Lights located at (x,z) ({x}, {z}) will cause the legalizer to misbehave!");
+        }
         Ok(PlacementCell {
             x: x as f32,
             y: y as f32,
