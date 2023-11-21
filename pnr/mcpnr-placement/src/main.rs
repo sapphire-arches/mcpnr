@@ -125,9 +125,9 @@ fn center_all_moveable_cells(config: &Config, cells: &mut NetlistHypergraph) {
         current_max.y = max_f32(current_max.y, cell.y + cell.sy);
         current_max.z = max_f32(current_max.z, cell.z + cell.sz);
 
-        current_min.x = min_f32(current_min.x, cell.x + cell.sx);
-        current_min.y = min_f32(current_min.y, cell.y + cell.sy);
-        current_min.z = min_f32(current_min.z, cell.z + cell.sz);
+        current_min.x = min_f32(current_min.x, cell.x);
+        current_min.y = min_f32(current_min.y, cell.y);
+        current_min.z = min_f32(current_min.z, cell.z);
     }
 
     let delta = ((current_max - current_min) / 2.0) + current_min - desired_center;
