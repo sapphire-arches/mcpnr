@@ -23,7 +23,7 @@ fn test_diffuser() -> DiffusionPlacer {
 
     let diffusion_config = crate::config::DiffusionConfig {
         region_size: 2,
-        iteration_count: 1,
+        iterations: 1,
         delta_t: 0.1,
     };
 

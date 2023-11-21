@@ -147,39 +147,49 @@ fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()>
     for step in &config.schedule.schedule {
         match step {
             PlacementStep::CenterCells => {
+                let _span = info_span!("center_cells").entered();
                 center_all_moveable_cells(config, cells);
             }
-            PlacementStep::UnconstrainedWirelength { clique_threshold } => {
+            PlacementStep::UnconstrainedAnalytical { clique_threshold } => {
                 let _span = info_span!("unconstrained").entered();
                 let mut strategy =
                     ThresholdCrossover::new(*clique_threshold, Clique::new(), MoveableStar::new());
                 strategy.execute(cells)?;
             }
-            PlacementStep::Diffusion {
-                config: diffusion_config,
+            PlacementStep::Diffusion(diffusion_config) => {
+                let _span = info_span!(
+                    "diffusion",
+                    iterations = diffusion_config.iterations,
+                    region_size = diffusion_config.region_size,
+                    delta_t = diffusion_config.delta_t
+                )
+                .entered();
+                // Iterate between diffusion and some light analytic recover
+                let mut density = DiffusionPlacer::new(&config, &diffusion_config);
+
+                density.splat(cells);
+
+                // Diffusion simulation
+                for narrow_iteration in 0..diffusion_config.iterations {
+                    let _span =
+                        debug_span!("narrow_iteration", narrow_iteration = narrow_iteration)
+                            .entered();
+                    density.compute_velocities();
+                    density.move_cells(cells, diffusion_config.delta_t);
+                    density.step_time(diffusion_config.delta_t);
+                }
+            }
+            PlacementStep::ConstrainedAnalytical {
                 clique_threshold,
                 iterations,
             } => {
-                let _span = info_span!("diffusion").entered();
-                // Iterate between diffusion and some light analytic recover
-                for wide_iteration in 0..*iterations {
-                    let _span =
-                        info_span!("wide_iteration", wide_iteration = wide_iteration).entered();
-
-                    let mut density = DiffusionPlacer::new(&config, &diffusion_config);
-
-                    density.splat(cells);
-
-                    // Diffusion simulation
-                    for narrow_iteration in 0..128 {
-                        let _span =
-                            debug_span!("narrow_iteration", narrow_iteration = narrow_iteration)
-                                .entered();
-                        density.compute_velocities();
-                        density.move_cells(cells, diffusion_config.delta_t);
-                        density.step_time(diffusion_config.delta_t);
-                    }
-
+                let _span = info_span!(
+                    "analytical",
+                    iterations = iterations,
+                    clique_threshold = clique_threshold
+                )
+                .entered();
+                for _ in 0..*iterations {
                     // Analytic wirelength recovery phase
                     let mut strategy = ThresholdCrossover::new(
                         *clique_threshold,
@@ -187,15 +197,7 @@ fn place_algorithm(config: &Config, cells: &mut NetlistHypergraph) -> Result<()>
                         AnchoredByNet::new(),
                     );
 
-                    for narrow_iteration in 0..4 {
-                        let _span = info_span!(
-                            "analytical_narrow_iteration",
-                            narrow_iteration = narrow_iteration
-                        )
-                        .entered();
-                        center_all_moveable_cells(&config, cells);
-                        strategy.execute(cells)?;
-                    }
+                    strategy.execute(cells)?;
                 }
             }
         }

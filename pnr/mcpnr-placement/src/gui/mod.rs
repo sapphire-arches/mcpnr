@@ -29,6 +29,11 @@ struct UIState {
     // Global configuration
     config: Config,
 
+    // Number of cells to consider a clique for unconstrained analytical
+    unconstrained_num_clique: usize,
+    // Number of cells to consider a clique for constrained analytical
+    constrained_num_clique: usize,
+
     // Diffusion placer state, if we're experimenting with one
     diffusion_state: Option<DiffusionUIState>,
 
@@ -46,7 +51,7 @@ impl DiffusionUIState {
         ui.label("Diffusion placement");
         ui.add(egui::Slider::new(&mut self.diffusion_config.delta_t, 0.01..=0.5).logarithmic(true));
         ui.add(egui::Slider::new(
-            &mut self.diffusion_config.iteration_count,
+            &mut self.diffusion_config.iterations,
             1..=1024,
         ));
 
@@ -76,7 +81,7 @@ impl DiffusionUIState {
 
             self.diffusion_placer.splat(cells);
 
-            for iteration in 0..self.diffusion_config.iteration_count {
+            for iteration in 0..self.diffusion_config.iterations {
                 let _span = info_span!("diffusion_iteration", iteration = iteration).entered();
 
                 self.diffusion_placer.compute_velocities();
@@ -100,7 +105,7 @@ impl UIState {
 
         let diffusion_config = DiffusionConfig {
             region_size: 2,
-            iteration_count: 128,
+            iterations: 128,
             delta_t: 0.1,
         };
 
@@ -108,6 +113,9 @@ impl UIState {
 
         Self {
             config,
+
+            unconstrained_num_clique: 4,
+            constrained_num_clique: 4,
 
             diffusion_state: Some(DiffusionUIState {
                 diffusion_config,
@@ -140,9 +148,11 @@ impl App for UIState {
             }
 
             ui.group(|ui| {
-                if ui.button("Unconstrained Analytical").clicked() {
+                ui.heading("Unconstrained Analytical");
+                ui.add(egui::Slider::new(&mut self.unconstrained_num_clique, 1..=8));
+                if ui.button("Run").clicked() {
                     let mut strategy =
-                        ThresholdCrossover::new(4, Clique::new(), MoveableStar::new());
+                        ThresholdCrossover::new(self.unconstrained_num_clique, Clique::new(), MoveableStar::new());
                     match strategy.execute(&mut self.cells) {
                         Ok(_) => {}
                         Err(e) => log::error!("Unconstrained analytical failure: {:?}", e),
@@ -151,7 +161,9 @@ impl App for UIState {
             });
 
             ui.group(|ui| {
-                if ui.button("Constrained Analytical").clicked() {
+                ui.heading("Constrained Analytical");
+                ui.add(egui::Slider::new(&mut self.constrained_num_clique, 1..=8));
+                if ui.button("Run").clicked() {
                     let mut strategy =
                         ThresholdCrossover::new(2, Clique::new(), AnchoredByNet::new());
                     match strategy.execute(&mut self.cells) {
@@ -169,7 +181,7 @@ impl App for UIState {
                     if self.diffusion_state.is_none() {
                         let diffusion_config = DiffusionConfig {
                             region_size: 2,
-                            iteration_count: 128,
+                            iterations: 128,
                             delta_t: 0.1,
                         };
 

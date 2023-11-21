@@ -139,6 +139,16 @@ impl Canvas {
                 input.scroll_delta.y
             };
 
+            let max_layers = diffusion.map(|d| d.density.shape()[1]).unwrap_or(1);
+            self.selected_layer = if input.key_pressed(Key::Q) {
+                self.selected_layer + 1
+            } else if input.key_pressed(Key::E) {
+                self.selected_layer + max_layers - 1
+            } else {
+                self.selected_layer
+            };
+            self.selected_layer %= max_layers;
+
             const SCALE: f32 = 0.5;
 
             let factor = if delta > 0.0 {
