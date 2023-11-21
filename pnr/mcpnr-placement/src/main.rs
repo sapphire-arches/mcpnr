@@ -124,11 +124,11 @@ fn center_all_moveable_cells(config: &Config, cells: &mut NetlistHypergraph) {
             continue;
         }
         current_max.x = max_f32(current_max.x, cell.x + cell.sx);
-        current_max.y = max_f32(current_max.y, cell.y + cell.sy);
+        current_max.y = max_f32(current_max.y, cell.tier_y + cell.s_tier_y);
         current_max.z = max_f32(current_max.z, cell.z + cell.sz);
 
         current_min.x = min_f32(current_min.x, cell.x);
-        current_min.y = min_f32(current_min.y, cell.y);
+        current_min.y = min_f32(current_min.y, cell.tier_y);
         current_min.z = min_f32(current_min.z, cell.z);
     }
 
@@ -139,7 +139,7 @@ fn center_all_moveable_cells(config: &Config, cells: &mut NetlistHypergraph) {
             continue;
         }
         cell.x -= delta.x;
-        cell.y -= delta.y;
+        cell.tier_y -= delta.y;
         cell.z -= delta.z;
     }
 }

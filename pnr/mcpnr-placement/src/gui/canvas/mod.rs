@@ -373,7 +373,7 @@ impl Canvas {
                 egui::Color32::from_rgba_unmultiplied(0, 255, 255, 255),
                 RECT_IDX_LEGAL,
                 cells.iter().filter_map(|cell| {
-                    if cell.y as usize == self.selected_layer {
+                    if cell.tier_y as usize == self.selected_layer {
                         const INSET: f32 = 0.05;
                         Some(egui::Rect {
                             min: (cell.x as f32 + INSET, cell.z as f32 + INSET).into(),

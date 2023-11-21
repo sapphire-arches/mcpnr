@@ -7,6 +7,14 @@ pub use prost;
 
 use std::fmt::{Display, Formatter};
 
+/// Number of blocks per row along the Z axis. This is chosen to be larger than the maximum
+/// Z size of any cell
+pub const BLOCKS_PER_Z_ROW: u32 = 6;
+
+/// Number of blocks per tier. Each tier is composed of a layer of cells and 4 "metal" layers, used
+/// for routing. The cell layer is 8 blocks high, and each metal layer is 2 blocks high
+pub const BLOCKS_PER_TIER: u32 = 16;
+
 /// Error generated when cell attribute retrieval fails
 #[derive(Debug)]
 pub enum CellGetAttribError {

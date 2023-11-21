@@ -7,6 +7,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use mcpnr_common::{BLOCKS_PER_Z_ROW, BLOCKS_PER_TIER};
 use nalgebra::Vector3;
 
 use crate::{
@@ -83,7 +84,6 @@ impl Legalizer for TetrisLegalizer {
         //      - if this cost is better than any we've seen before, keep it in mind
         //  - select the best found row and update the min_x for that row
         //
-        const BLOCKS_PER_Z_ROW: u32 = 6;
         let max_y = config.size_y;
         // Takes a (layer, row coordinate) pair for (y,z) and converts it to the row index
         let row_idx = |y: u32, z: u32| {
@@ -113,10 +113,10 @@ impl Legalizer for TetrisLegalizer {
                     let z_row = (i as u32) / max_y;
 
                     let min_pos = Vector3::new(x as f32, y as f32, (z_row * BLOCKS_PER_Z_ROW) as f32);
-                    let cell_pos = Vector3::new(cell.x, cell.y, cell.z);
+                    let cell_pos = Vector3::new(cell.x, cell.tier_y, cell.z);
                     let delta = (min_pos - cell_pos).abs();
 
-                    let cost = delta.x + delta.y * 16.0 + delta.z * BLOCKS_PER_Z_ROW as f32;
+                    let cost = delta.x + delta.y * BLOCKS_PER_TIER as f32 + delta.z * BLOCKS_PER_Z_ROW as f32;
 
                     if cost < min_cost && x + legalized.sx <= config.size_x {
                         min_cost = cost;
@@ -125,12 +125,12 @@ impl Legalizer for TetrisLegalizer {
                 }
 
                 legalized.x = min_cost_pos.x;
-                legalized.y = min_cost_pos.y;
+                legalized.tier_y = min_cost_pos.y;
                 legalized.z = min_cost_pos.z;
             }
 
             let row_x = legalized.x;
-            let row_y = legalized.y;
+            let row_y = legalized.tier_y;
             let row_z = legalized.z / BLOCKS_PER_Z_ROW;
             min_x[row_idx(row_y, row_z)] = row_x + legalized.sx;
 

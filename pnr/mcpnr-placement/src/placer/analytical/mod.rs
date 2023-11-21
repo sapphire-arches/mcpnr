@@ -285,7 +285,7 @@ pub trait DecompositionStrategy {
                 debug_assert!(!cell.pos_locked);
 
                 cell.x = x[i] - cell.sx / 2.0;
-                cell.y = y[i] - cell.sy / 2.0;
+                cell.tier_y = y[i] - cell.s_tier_y / 2.0;
                 cell.z = z[i] - cell.sz / 2.0;
             }
         });

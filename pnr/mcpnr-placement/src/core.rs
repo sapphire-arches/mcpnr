@@ -6,7 +6,7 @@ use mcpnr_common::{
         parameter::Value, placed_design::Cell, BitVector, NetMetadata, Parameter,
         PlacedDesign, Position,
     },
-    yosys::{ConstOrSignal, Module},
+    yosys::{ConstOrSignal, Module}, BLOCKS_PER_TIER,
 };
 
 use crate::placement_cell::{CellFactory, LegalizedCell, PlacementCell};
@@ -260,7 +260,7 @@ impl NetlistHypergraph {
                 .map(|(cell, meta)| Cell {
                     pos: Some(Position {
                         x: cell.x,
-                        y: cell.y,
+                        y: cell.tier_y * BLOCKS_PER_TIER,
                         z: cell.z,
                     }),
                     r#type: meta.ty,

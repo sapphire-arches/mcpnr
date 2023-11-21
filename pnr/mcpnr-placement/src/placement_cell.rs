@@ -1,14 +1,15 @@
 use anyhow::{anyhow, Context, Result};
-use mcpnr_common::{minecraft_types::Structure, yosys::Cell, CellExt};
+use mcpnr_common::{minecraft_types::Structure, yosys::Cell, CellExt, BLOCKS_PER_TIER};
 use nalgebra::Vector3;
 use std::{collections::HashMap, path::PathBuf};
 
-pub const XZ_EXPANSION: u32 = 0;
-
 /// Internal type containing the metadata we care about from a given cell's NBT data.
 pub(crate) struct PlacementStructureData {
+    /// X size, in blocks.
     sx: u32,
+    /// Y size, in blocks.
     sy: u32,
+    /// Z size, in blocks.
     sz: u32,
 }
 
@@ -21,16 +22,13 @@ pub struct CellFactory {
 }
 
 /// Cell representation for global placement.
-/// The X and Z axies include the [`XZ_EXPANSION`] factor applied so the actual position of the
-/// cell should be `(self.x + XZ_EXPANSION, y, self.z + XZ_EXPANSION)` and the size is similarly
-/// `(sx - 2 * XZ_EXPANSION, sy, sz - 2 * XZ_EXPANSION)`
 #[derive(Debug)]
 pub struct PlacementCell {
     pub x: f32,
-    pub y: f32,
+    pub tier_y: f32,
     pub z: f32,
     pub sx: f32,
-    pub sy: f32,
+    pub s_tier_y: f32,
     pub sz: f32,
     /// Whether the cell is locked in place (e.g. it's an IO macro)
     ///
@@ -40,37 +38,29 @@ pub struct PlacementCell {
 }
 
 impl PlacementCell {
-    pub fn unexpanded_pos(&self) -> [u32; 3] {
-        if self.pos_locked {
-            [self.x as u32, self.y as u32, self.z as u32]
-        } else {
-            [
-                self.x as u32 + XZ_EXPANSION,
-                self.y as u32,
-                self.z as u32 + XZ_EXPANSION,
-            ]
-        }
-    }
-
     pub fn center_pos(&self) -> Vector3<f32> {
         Vector3::new(
             self.x as f32 + (self.sx as f32 / 2.0),
-            self.y as f32 + (self.sy as f32 / 2.0),
+            self.tier_y as f32 + (self.s_tier_y as f32 / 2.0),
             self.z as f32 + (self.sz as f32 / 2.0),
         )
     }
 }
 
 /// Cell post-legalization.
-///
-/// This does *not* have the `XZ_EXPANSION`
 #[derive(Debug)]
 pub struct LegalizedCell {
+    /// Position on the X axis, in blocks.
     pub x: u32,
-    pub y: u32,
+    /// Position on the Y axis, in tiers.
+    pub tier_y: u32,
+    /// Position on the Z axis, in blocks.
     pub z: u32,
+    /// Size along the X axis, in blocks.
     pub sx: u32,
-    pub sy: u32,
+    /// Size along the Y axis, in tiers.
+    pub s_tier_y: u32,
+    /// Size along the Z axis, in blocks.
     pub sz: u32,
 }
 
@@ -78,12 +68,12 @@ impl LegalizedCell {
     /// Construct a [LegalizedCell] from a [PlacementCell]
     pub fn from_placement(cell: &PlacementCell) -> Self {
         Self {
-            x: (cell.x + XZ_EXPANSION as f32).round() as u32,
-            y: cell.y.round() as u32,
-            z: (cell.z + XZ_EXPANSION as f32).round() as u32,
-            sx: cell.sx.round() as u32 - 2 * XZ_EXPANSION,
-            sy: cell.sy.round() as u32,
-            sz: cell.sz.round() as u32 - 2 * XZ_EXPANSION,
+            x: (cell.x.round() + 0.5) as u32,
+            tier_y: (cell.tier_y.round() + 0.5) as u32,
+            z: (cell.z.round() + 0.5) as u32,
+            sx: (cell.sx.round() + 0.5) as u32,
+            s_tier_y: (cell.s_tier_y.round() + 0.5) as u32,
+            sz: (cell.sz.round() + 0.5) as u32,
         }
     }
 }
@@ -138,9 +128,9 @@ impl CellFactory {
             );
 
             let cell_data = PlacementStructureData {
-                sx: (((cell_extents.1).0) - ((cell_extents.0).0)) as u32 + 2 * XZ_EXPANSION,
+                sx: (((cell_extents.1).0) - ((cell_extents.0).0)) as u32,
                 sy: (((cell_extents.1).1) - ((cell_extents.0).1)) as u32,
-                sz: (((cell_extents.1).2) - ((cell_extents.0).2)) as u32 + 2 * XZ_EXPANSION,
+                sz: (((cell_extents.1).2) - ((cell_extents.0).2)) as u32,
             };
 
             log::info!(
@@ -177,14 +167,16 @@ impl CellFactory {
         let (x, y, z) = get_cell_pos(cell)?;
         let nswitches = cell.get_param_i64_with_default("NSWITCH", 1)?;
         if x > 0 && z > 0 {
-            log::warn!("Switches located at (x,z) ({x}, {z}) will cause the legalizer to misbehave!");
+            log::warn!(
+                "Switches located at (x,z) ({x}, {z}) will cause the legalizer to misbehave!"
+            );
         }
         Ok(PlacementCell {
             x: x as f32,
-            y: y as f32,
+            tier_y: (y / BLOCKS_PER_TIER) as f32,
             z: z as f32,
             sx: (nswitches as f32) * 2.0,
-            sy: 2.0,
+            s_tier_y: 1.0,
             sz: 4.0,
             pos_locked: true,
         })
@@ -198,10 +190,10 @@ impl CellFactory {
         }
         Ok(PlacementCell {
             x: x as f32,
-            y: y as f32,
+            tier_y: (y / BLOCKS_PER_TIER) as f32,
             z: z as f32,
             sx: (nlight as f32) * 2.0,
-            sy: 2.0,
+            s_tier_y: 1.0,
             sz: 2.0,
             pos_locked: true,
         })
@@ -210,12 +202,14 @@ impl CellFactory {
     pub fn build_from_nbt<'design>(&mut self, cell: &Cell) -> Result<PlacementCell> {
         let sd = self.load_structure(&cell.ty)?;
 
+        let s_tier_y = (sd.sy + BLOCKS_PER_TIER - 1) / BLOCKS_PER_TIER;
+
         Ok(PlacementCell {
             x: 0.0,
-            y: 0.0,
+            tier_y: 0.0,
             z: 0.0,
             sx: (sd.sx + (sd.sx % 2)) as f32,
-            sy: (sd.sy) as f32,
+            s_tier_y: s_tier_y as f32,
             sz: (sd.sz + (sd.sz % 2)) as f32,
             pos_locked: false,
         })

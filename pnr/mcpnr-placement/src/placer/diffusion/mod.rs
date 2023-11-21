@@ -89,11 +89,11 @@ impl DiffusionPlacer {
         for cell in net.cells.iter() {
             // We add 1 after clamping to ensure placement inside the "live" region and not the
             let cell_x_start = region_size_f + cell.x.clamp(0.0, size_x * region_size_f);
-            let cell_y_start = region_size_f + cell.y.clamp(0.0, size_y * region_size_f);
+            let cell_y_start = region_size_f + cell.tier_y.clamp(0.0, size_y * region_size_f);
             let cell_z_start = region_size_f + cell.z.clamp(0.0, size_z * region_size_f);
 
             let cell_x_end = region_size_f + (cell.x + cell.sx).clamp(0.0, size_x * region_size_f);
-            let cell_y_end = region_size_f + (cell.y + cell.sy).clamp(0.0, size_y * region_size_f);
+            let cell_y_end = region_size_f + (cell.tier_y + cell.s_tier_y).clamp(0.0, size_y * region_size_f);
             let cell_z_end = region_size_f + (cell.z + cell.sz).clamp(0.0, size_z * region_size_f);
 
             let mut cell_x = cell_x_start;
@@ -193,8 +193,8 @@ impl DiffusionPlacer {
                 skip_cell = true;
             }
 
-            if cell.y < 0.0 {
-                cell.y = 0.0;
+            if cell.tier_y < 0.0 {
+                cell.tier_y = 0.0;
                 skip_cell_low_count[1] += 1;
                 skip_cell = true;
             }
@@ -213,8 +213,8 @@ impl DiffusionPlacer {
             }
 
             let y_limit = ((shape[1] - 2) * self.region_size) as f32;
-            if cell.y + cell.sy > y_limit {
-                cell.y = y_limit - cell.sy;
+            if cell.tier_y + cell.s_tier_y > y_limit {
+                cell.tier_y = y_limit - cell.s_tier_y;
                 skip_cell_high_count[1] += 1;
                 skip_cell = true;
             }
@@ -266,7 +266,7 @@ impl DiffusionPlacer {
 
                 match axis {
                     0 => cell.x += v * dt,
-                    1 => cell.y += v * dt,
+                    1 => cell.tier_y += v * dt,
                     2 => cell.z += v * dt,
                     _ => unreachable!("Only 3 axies"),
                 }
