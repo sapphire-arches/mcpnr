@@ -1,3 +1,4 @@
+`default_nettype none
 module mc_io_top (
 );
   wire clk, reset, timer_irq;
@@ -20,6 +21,8 @@ module mc_io_top (
   wire        ibus_cyc;
   wire [31:0] ibus_rdt;
   wire        ibus_ack;
+  wire [33:0] ibus_i_full = { ibus_rdt, ibus_ack };
+  wire [33:0] ibus_o_full = { ibus_adr, ibus_cyc };
 
   // Data bus wires
   wire [31:0] o_dbus_adr;
@@ -29,103 +32,130 @@ module mc_io_top (
   wire        o_dbus_cyc;
   wire [31:0] i_dbus_rdt;
   wire        i_dbus_ack;
+  wire [33:0] dbus_i_full                    = { i_dbus_rdt, i_dbus_ack };
+  wire [(32 + 32 + 4 + 1 + 1):0] dbus_o_full = { o_dbus_adr, o_dbus_dat, o_dbus_sel, o_dbus_we, o_dbus_cyc };
 
-  // Extension bus wires
-  wire [ 2:0] ext_funct3;
-  wire        ext_ready;
-  wire [31:0] ext_rd;
-  wire [31:0] ext_rs1;
-  wire [31:0] ext_rs2;
-  //MDU
-  wire        o_mdu_valid;
+  // Collcetion of output wires
+  wire [(2 + 6 * 2 + 4 + 6 * 2):0] regfile_outputs = {
+    rf_rreq,
+    rf_wreq,
+    wreg0,
+    wreg1,
+    wen0,
+    wen1,
+    wdata0,
+    wdata1,
+    rreg0,
+    rreg1
+  };
+
+  // Layout of lights and switches, by tier:
+  //     0       8      16      24      32      40      48      56      64      72      80      88      96     104     112     120     128     136     144
+  // 0   |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |
+  //     F D0D1  RF_O........................................................          IBUS_I............................................................
+  // 1   |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |
+  //     C R I M DBUS_I............................................................    IBUS_O............................................................
+  // 2   |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |
+  //     DBUS_O......................................................................................................................................
+  // 3   |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |       |
+  //     
+  //
+  // F = rf_ready
+  // D0,D1 = rdata0, rdata1
+  // C = clock
+  // R = reset
+  // I = timer interrupt
+  // M = mdu_valid
+  //
 
   // Generic I/O pins
   MCPNR_SWITCHES #(
-    .POS_X(0), .POS_Y(0), .POS_Z(0),
-    .NSWITCH(3),
+    .POS_X(0), .POS_Y(16), .POS_Z(0),
+    .NSWITCH(1),
   ) clk_switch (
-    .O({clk, reset, timer_irq})
+    .O({clk})
+  );
+
+  MCPNR_SWITCHES #(
+    .POS_X(2), .POS_Y(16), .POS_Z(0),
+    .NSWITCH(1),
+  ) rst_switch (
+    .O({reset})
+  );
+
+  MCPNR_SWITCHES #(
+    .POS_X(4), .POS_Y(16), .POS_Z(0),
+    .NSWITCH(1),
+  ) timer_irq_switch (
+    .O({timer_irq})
   );
 
   // Register file interface
   // TODO: replace this with an efficient "block ram" (hehe geddit)
   MCPNR_SWITCHES #(
-    .POS_X(16), .POS_Y(0), .POS_Z(0),
+    .POS_X(0), .POS_Y(0), .POS_Z(0),
     .NSWITCH(3),
   ) rf_switch (
     .O({rf_ready, rdata0, rdata1})
   );
 
-  MCPNR_LIGHTS #(
-    .POS_X(16), .POS_Y(8), .POS_Z(0),
-    .NLIGHT(2 + 6 * 2 + 4 + 6 * 2),
-  ) rf_light (
-    .I({
-      rf_rreq,
-      rf_wreq,
-      wreg0,
-      wreg1,
-      wen0,
-      wen1,
-      wdata0,
-      wdata1,
-      rreg0,
-      rreg1
-    })
-  );
-
-  // Instruction bus
-  MCPNR_SWITCHES #(
-    .POS_X(64), .POS_Y(0), .POS_Z(0),
-    .NSWITCH(32 + 1)
-  ) ibus_switches (
-    .O({ibus_rdt, ibus_ack})
-  );
-
-  MCPNR_LIGHTS #(
-    .POS_X(64), .POS_Y(8), .POS_Z(0),
-    .NLIGHT(32 + 1)
-  ) ibus_lights (
-    .I({ibus_adr, ibus_cyc})
-  );
+  genvar i;
+  generate
+    for (i = 0; i < $size(regfile_outputs); i = i + 1) begin
+      MCPNR_LIGHTS #(
+        .POS_X(8 + 2*i), .POS_Y(0), .POS_Z(0),
+        .NLIGHT(1),
+      ) rf_light (
+        .I(regfile_outputs[i])
+      );
+    end
+  endgenerate
 
   // Data bus
-  MCPNR_SWITCHES #(
-    .POS_X(0), .POS_Y(16), .POS_Z(0),
-    .NSWITCH(32 + 1)
-  ) data_switches (
-    .O({dbus_rdt, dbus_ack})
-  );
+  generate
+    for (i = 0; i < 33; i = i + 1) begin
+      MCPNR_SWITCHES #(
+        .POS_X(8 + 2*i), .POS_Y(16), .POS_Z(0),
+        .NSWITCH(1)
+      ) data_switches (
+        .O(dbus_i_full[i])
+      );
+    end
+  endgenerate
 
-  MCPNR_LIGHTS #(
-    .POS_X(0), .POS_Y(24), .POS_Z(0),
-    .NLIGHT(32 + 32 + 4 + 1 + 1)
-  ) data_lights (
-    .I({dbus_adr, dbus_dat, dbus_sel, dbus_we, dbus_cyc})
-  );
+  generate
+    for (i = 0; i < $bits(dbus_o_full); i = i + 1) begin
+      MCPNR_LIGHTS #(
+        .POS_X(2 * i), .POS_Y(32), .POS_Z(0),
+        .NLIGHT(1)
+      ) data_lights (
+        .I(dbus_o_full[i])
+      );
+    end
+  endgenerate
 
-  // Extension bus
-  MCPNR_SWITCHES #(
-    .POS_X(0), .POS_Y(32), .POS_Z(0),
-    .NSWITCH(1 + 32)
-  ) ext_switches (
-    .O({ext_ready, ext_rd})
-  );
+  // Instruction bus
+  generate
+    for (i = 0; i < 33; i = i + 1) begin
+      MCPNR_SWITCHES #(
+        .POS_X(78 + 2*i), .POS_Y(0), .POS_Z(0),
+        .NSWITCH(1)
+      ) ibus_switches (
+        .O(ibus_i_full[i])
+      );
+    end
+  endgenerate
 
-  MCPNR_LIGHTS #(
-    .POS_X(0), .POS_Y(64), .POS_Z(0),
-    .NLIGHT(3 + 32 + 32)
-  ) ext_lights (
-    .I({ext_funct3, ext_rs1, ext_rs2})
-  );
-
-  // MDU
-  MCPNR_LIGHTS #(
-    .POS_X(0), .POS_Y(32), .POS_Z(0),
-    .NLIGHT(1)
-  ) mdu_lights (
-    .I(mdu_valid)
-  );
+  generate
+    for (i = 0; i < 33; i = i + 1) begin
+      MCPNR_LIGHTS #(
+        .POS_X(78 + 2*i), .POS_Y(16), .POS_Z(0),
+        .NLIGHT(1)
+      ) ibus_lights (
+        .I(ibus_o_full[i])
+      );
+    end
+  endgenerate
 
   // SERV instantiation
   serv_top #() serv (
@@ -153,20 +183,12 @@ module mc_io_top (
     .i_ibus_rdt(ibus_rdt),
     .i_ibus_ack(ibus_ack),
     // Data bus
-    .o_dbus_adr(dbus_adr),
-    .o_dbus_dat(dbus_dat),
-    .o_dbus_sel(dbus_sel),
-    .o_dbus_we (dbus_we ),
-    .o_dbus_cyc(dbus_cyc),
-    .i_dbus_rdt(dbus_rdt),
-    .i_dbus_ack(dbus_ack),
-    //Extension
-    .o_ext_funct3(ext_funct3),
-    .i_ext_ready(ext_ready),
-    .i_ext_rd(ext_rd),
-    .o_ext_rs1(ext_rs1),
-    .o_ext_rs2(ext_rs2),
-    //MDU
-    .o_mdu_valid(mdu_valid)
+    .o_dbus_adr(o_dbus_adr),
+    .o_dbus_dat(o_dbus_dat),
+    .o_dbus_sel(o_dbus_sel),
+    .o_dbus_we (o_dbus_we ),
+    .o_dbus_cyc(o_dbus_cyc),
+    .i_dbus_rdt(i_dbus_rdt),
+    .i_dbus_ack(i_dbus_ack),
   );
 endmodule

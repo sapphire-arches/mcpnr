@@ -66,6 +66,10 @@ yosys -s ${YOSYS_SCRIPT_FILE} | tee ${YOSYS_LOG_FILE}
 
 cp ${BUILD_DIR}/${2}.yosys-design .
 
-${MCPNR_RUST_TOOLS}/mcpnr-placement place --techlib ${MC_TECHLIB} ${BUILD_DIR}/${2}.yosys-design ${BUILD_DIR}/${2}.mcpnr-placement
-${MCPNR_RUST_TOOLS}/mcpnr-routing --tiers 3 --techlib ${MC_TECHLIB} ${BUILD_DIR}/${2}.mcpnr-placement ${BUILD_DIR}/${2}.mcpnr-routed
-python3 ${MY_DIR}/../../pnr/routed-to-world/convert.py ${BUILD_DIR}/${2}.mcpnr-routed "${HOME}/.minecraft/saves/Designs"
+SIZE_X=144
+SIZE_Z=128
+TIERS=4
+
+${MCPNR_RUST_TOOLS}/mcpnr-placement place --size-y ${TIERS} --size-x ${SIZE_X} --size-z ${SIZE_Z} --techlib ${MC_TECHLIB} ${BUILD_DIR}/${2}.yosys-design ${BUILD_DIR}/${2}.mcpnr-placement
+${MCPNR_RUST_TOOLS}/mcpnr-routing --tiers ${TIERS} --techlib ${MC_TECHLIB} ${BUILD_DIR}/${2}.mcpnr-placement ${BUILD_DIR}/${2}.mcpnr-routed
+python3 ${MY_DIR}/../../pnr/routed-to-world/convert.py ${BUILD_DIR}/${2}.mcpnr-routed "${HOME}/.local/share/PrismLauncher/instances/1.20.2/.minecraft/saves/Designs"
