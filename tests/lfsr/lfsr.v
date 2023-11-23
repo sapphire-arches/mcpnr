@@ -16,7 +16,7 @@ module top ();
     for (i = 0; i < 64; i = i + 1) begin
       MCPNR_LIGHTS #(
         .POS_X(0 + (i * 2)),
-        .POS_Y(8),
+        .POS_Y(16),
         .POS_Z(0),
         .NLIGHT(1)
       ) output_lights (
