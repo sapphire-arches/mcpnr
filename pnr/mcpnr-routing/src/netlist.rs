@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use itertools::Itertools;
-use mcpnr_common::protos::mcpnr::{PlacedDesign, signal::Type};
+use mcpnr_common::protos::mcpnr::{signal::Type, PlacedDesign};
 
 use crate::structure_cache::StructureCache;
 
@@ -65,15 +65,13 @@ impl Netlist {
                     let net_idx = match net.r#type {
                         Some(Type::Id(x)) => x,
                         // TODO: plumb through cell names so we can report better errors here and elsewhere
-                        _ => {
-                            return Err(anyhow!(
+                        _ => return Err(anyhow!(
                             "Unsupported net index type {:?} processing pin {}[{}] (cell: {:?})",
                             net.r#type,
                             port,
                             bit_idx,
                             cell
-                        ))
-                        }
+                        )),
                     };
 
                     let pin_idx = pins
