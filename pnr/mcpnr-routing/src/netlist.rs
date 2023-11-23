@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use itertools::Itertools;
-use mcpnr_common::protos::mcpnr::{signal::Type, PlacedDesign};
+use mcpnr_common::protos::mcpnr::{signal::{Type, ConstantDriver}, PlacedDesign};
 
 use crate::structure_cache::StructureCache;
 
@@ -64,6 +64,12 @@ impl Netlist {
                         })?;
                     let net_idx = match net.r#type {
                         Some(Type::Id(x)) => x,
+                        Some(Type::Constant(c)) => {
+                            // Skip doing anything useful here. We should check that the pin
+                            // direction makes it safe to ignore for the driver type but eugh
+                            let _ = ConstantDriver::from_i32(c).ok_or_else(|| anyhow!("Unknown constant driver type {c}"))?;
+                            continue;
+                        }
                         // TODO: plumb through cell names so we can report better errors here and elsewhere
                         _ => return Err(anyhow!(
                             "Unsupported net index type {:?} processing pin {}[{}] (cell: {:?})",

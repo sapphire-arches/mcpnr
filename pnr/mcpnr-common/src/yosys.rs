@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{CellExt, CellGetAttribError};
+use crate::{CellExt, CellGetAttribError, protos::mcpnr::signal::ConstantDriver};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Design {
@@ -34,9 +34,10 @@ impl ConstOrSignal {
 
         match self {
             Self::Const(s) => match s.as_str() {
-                "0" => Type::Constant(0),
-                "1" => Type::Constant(1),
-                _ => Type::Constant(2),
+                "0" => Type::Constant(ConstantDriver::Low.into()),
+                "1" => Type::Constant(ConstantDriver::High.into()),
+                "x" => Type::Constant(ConstantDriver::X.into()),
+                _ => Type::Constant(ConstantDriver::Invalid.into()),
             },
             Self::Signal(s) => Type::Id((*s).try_into().unwrap()),
         }
