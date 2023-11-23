@@ -293,7 +293,7 @@ impl DetailRouter {
             }
         };
 
-        match self.get_cell(driver)? {
+        match self.get_cell(sink)? {
             GridCell::Free => {}
             GridCell::Blocked => {
                 self.debug_dump();
