@@ -38,7 +38,7 @@ impl ConstOrSignal {
                 "1" => Type::Constant(1),
                 _ => Type::Constant(2),
             },
-            Self::Signal(s) => Type::Constant((*s).try_into().unwrap()),
+            Self::Signal(s) => Type::Id((*s).try_into().unwrap()),
         }
     }
 }
