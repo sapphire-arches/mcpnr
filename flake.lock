@@ -13,11 +13,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1655087676,
-        "narHash": "sha256-jot9hdNLJPf0OvZcXqr5NE8le2GAXD/uLCDMrccykks=",
+        "lastModified": 1700628314,
+        "narHash": "sha256-qMXsOI8jlCE7FcoRNgQwaDjMe6abXc5ogOgwYwRygZQ=",
         "owner": "bobtwinkles",
         "repo": "amulet-flake",
-        "rev": "fd1a8852de119141b5fc6b2e8a0cb198a5083d9a",
+        "rev": "fbf0bd1457f10cfe7c27076bc229b983da9bd74a",
         "type": "github"
       },
       "original": {

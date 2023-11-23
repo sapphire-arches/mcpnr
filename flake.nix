@@ -49,7 +49,7 @@
 
           devShell =
             let
-              pythonPackage = pkgs.python39.withPackages (pythonPackages: with pythonPackages; [
+              pythonPackage = pkgs.python310.withPackages (pythonPackages: with pythonPackages; [
                 xdot
                 amulet-core
               ]);
