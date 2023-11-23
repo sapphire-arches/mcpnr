@@ -44,6 +44,7 @@ fn parse_args() -> Result<Config> {
             Arg::with_name("TECHLIB")
                 .long("techlib")
                 .value_name("TECHLIB")
+                .allow_invalid_utf8(true)
                 .required(true),
         )
         .arg(
@@ -55,12 +56,14 @@ fn parse_args() -> Result<Config> {
         .arg(
             Arg::with_name("INPUT")
                 .help("Input design, as the output of a Yosys write_protobuf command")
+                .allow_invalid_utf8(true)
                 .index(1)
                 .required(true),
         )
         .arg(
             Arg::with_name("OUTPUT")
                 .help("Output file location")
+                .allow_invalid_utf8(true)
                 .index(2)
                 .required(true),
         )
