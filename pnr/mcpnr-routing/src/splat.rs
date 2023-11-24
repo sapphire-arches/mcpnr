@@ -150,6 +150,7 @@ impl<'a> Splatter<'a> {
             }
         }
 
+        /*
         let tier_colors: [(BlockTypeIndex, BlockTypeIndex); 5] = [
             // local interconnect / logic layer
             (
@@ -197,6 +198,15 @@ impl<'a> Splatter<'a> {
                     };
 
                     *(o.get_block_mut(x, y, z)?) = block;
+                }
+            }
+        }
+        */
+
+        for x in 0..extents[0] {
+            for y in 0..extents[1] {
+                for z in 0..extents[2] {
+                    *(o.get_block_mut(x, y, z)?) = self.get_common_block("air")?;
                 }
             }
         }
