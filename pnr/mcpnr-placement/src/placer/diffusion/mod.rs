@@ -87,13 +87,14 @@ impl DiffusionPlacer {
         // strategies are more efficient, e.g. iterating over the region grid instead and then
         // finding the cells in an acceleration structure.
         for cell in net.cells.iter() {
-            // We add 1 after clamping to ensure placement inside the "live" region and not the
+            // We add region_size_f after clamping to account for the marigin
             let cell_x_start = region_size_f + cell.x.clamp(0.0, size_x * region_size_f);
             let cell_y_start = region_size_f + cell.tier_y.clamp(0.0, size_y * region_size_f);
             let cell_z_start = region_size_f + cell.z.clamp(0.0, size_z * region_size_f);
 
             let cell_x_end = region_size_f + (cell.x + cell.sx).clamp(0.0, size_x * region_size_f);
-            let cell_y_end = region_size_f + (cell.tier_y + cell.s_tier_y).clamp(0.0, size_y * region_size_f);
+            let cell_y_end =
+                region_size_f + (cell.tier_y + cell.s_tier_y).clamp(0.0, size_y * region_size_f);
             let cell_z_end = region_size_f + (cell.z + cell.sz).clamp(0.0, size_z * region_size_f);
 
             let mut cell_x = cell_x_start;
@@ -231,6 +232,7 @@ impl DiffusionPlacer {
                 continue;
             }
 
+            // Inset from the margin
             let i = (p.x as usize + 1, p.y as usize + 1, p.z as usize + 1);
 
             let f0 = (p.x.fract(), p.y.fract(), p.z.fract());
