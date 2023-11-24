@@ -9,7 +9,7 @@ use std::fmt::{Display, Formatter};
 
 /// Number of blocks per row along the Z axis. This is chosen to be larger than the maximum
 /// Z size of any cell
-pub const BLOCKS_PER_Z_ROW: u32 = 6;
+pub const BLOCKS_PER_Z_ROW: u32 = 8;
 
 /// Number of blocks per tier. Each tier is composed of a layer of cells and 4 "metal" layers, used
 /// for routing. The cell layer is 8 blocks high, and each metal layer is 2 blocks high
