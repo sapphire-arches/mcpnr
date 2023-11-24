@@ -82,7 +82,7 @@ decode-placed: $(MODULE_PLACED)
 
 WORLD_NAME ?=Designs
 install-to-world: $(MODULE_ROUTED) $(INSTALL_TOOL)
-	$(call QUIET_CMD,PYTHON3) $(PYTHON3) $(INSTALL_TOOL) $(MODULE_ROUTED) "${HOME}/.minecraft/saves/$(WORLD_NAME)"
+	$(call QUIET_CMD,PYTHON3) $(PYTHON3) $(INSTALL_TOOL) $(MODULE_ROUTED) "${HOME}/.local/share/PrismLauncher/instances/1.20.2/.minecraft/saves/$(WORLD_NAME)"
 
 #
 # Actual build rules
@@ -105,7 +105,7 @@ $(MODULE_PLACED) : $(MODULE_TECHMAPPED) $(PLACEMENT_TOOL)
 	$(call QUIET_CMD,PLACE) $(PLACEMENT_TOOL_CMD) $< $@
 
 $(MODULE_ROUTED) : $(MODULE_PLACED) $(ROUTING_TOOL)
-	$(call QUIET_CMD,ROUTE) $(ROUTING_TOOL_CMD) $< $@
+	$(call QUIET_CMD,ROUTE) $(ROUTING_TOOL_CMD) --tiers 4 $< $@
 
 #
 # Build rules for tools
