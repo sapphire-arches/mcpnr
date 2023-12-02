@@ -138,7 +138,11 @@ impl DiffusionPlacer {
             log::warn!("Overall grid is overfilled, can not add baseline density (real mass: {total_real_mass} > target_mass: {target_mass})");
         } else {
             let extra_density_per_cell = extra_density / volume;
-            Zip::from(&mut self.density).for_each(|d| *d += extra_density_per_cell);
+            Zip::from(
+                self.density
+                    .slice_mut(ndarray::s![1isize..-1, 1isize..-1, 1isize..-1]),
+            )
+            .for_each(|d| *d += extra_density_per_cell);
         }
     }
 
